@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="brand_primary">#FF6A3DE8</color>
+    <color name="brand_primary_dark">#FFC4B2FF</color>
+    <color name="brand_accent">#FFFF8A3D</color>
+
+    <!-- Skeleton colours: the person's own left side vs right side. -->
+    <color name="pose_left">#FFFF8A3D</color>
+    <color name="pose_right">#FF3DC8FF</color>
+    <color name="pose_center">#FFFFFFFF</color>
+    <color name="hud_background">#99000000</color>
+</resources>

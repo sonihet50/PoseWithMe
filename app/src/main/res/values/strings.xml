@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">PoseWithMe</string>
+
+    <string name="home_title">PoseWithMe</string>
+    <string name="home_subtitle">Strike the right pose, every time.</string>
+    <string name="home_start_camera">Start live pose camera</string>
+    <string name="home_build_note">Phase 1 build: camera + on-device pose detection test.</string>
+
+    <string name="camera_flip">Flip camera</string>
+    <string name="camera_loading_model">Loading pose model…</string>
+    <string name="camera_no_person">No person detected. Step back so your body is in view.</string>
+    <string name="camera_permission_denied">Camera permission is needed to detect your pose. Grant it in Settings and reopen this screen.</string>
+    <string name="camera_model_failed">Could not load the pose model: %1$s</string>
+    <string name="camera_bind_failed">Could not start the camera: %1$s</string>
+    <string name="camera_detector_error">Pose detection error: %1$s</string>
+</resources>

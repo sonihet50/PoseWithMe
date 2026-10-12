@@ -1,0 +1,9 @@
+# MediaPipe's native code calls back into these Java classes by name over JNI,
+# and its AARs ship no consumer keep rules.
+-keep class com.google.mediapipe.** { *; }
+-keep class * extends com.google.protobuf.GeneratedMessageLite { *; }
+-dontwarn com.google.mediapipe.**
+-dontwarn com.google.protobuf.**
+-dontwarn com.google.auto.value.**
+-dontwarn javax.annotation.**
+-dontwarn org.checkerframework.**

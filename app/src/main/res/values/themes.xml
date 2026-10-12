@@ -1,0 +1,13 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Base.Theme.PoseWithMe" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/brand_primary</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorSecondary">@color/brand_accent</item>
+    </style>
+
+    <style name="Theme.PoseWithMe" parent="Base.Theme.PoseWithMe" />
+
+    <style name="Theme.PoseWithMe.Camera" parent="Theme.PoseWithMe">
+        <item name="android:windowBackground">@color/black</item>
+    </style>
+</resources>
