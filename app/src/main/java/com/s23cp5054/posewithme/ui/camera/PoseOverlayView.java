@@ -12,10 +12,20 @@ import androidx.core.content.ContextCompat;
 import com.s23cp5054.posewithme.R;
 import com.s23cp5054.posewithme.camera.PreviewTransform;
 import com.s23cp5054.posewithme.pose.detection.PoseFrame;
+import com.s23cp5054.posewithme.pose.matching.BodyPart;
+import com.s23cp5054.posewithme.pose.matching.MatchResult;
+import com.s23cp5054.posewithme.pose.model.BodyPose;
+import com.s23cp5054.posewithme.pose.model.Landmark;
+import com.s23cp5054.posewithme.pose.model.PoseTemplate;
+import com.s23cp5054.posewithme.ui.pose.SilhouetteRenderer;
+
+import java.util.Map;
 
 /**
- * Draws the detected skeleton on top of the camera preview. The person's own left side is drawn
- * in orange and their right side in blue, which makes mirroring mistakes easy to spot.
+ * Draws over the camera preview: the target pose as a translucent mannequin "ghost" anchored
+ * to the user's hips and scaled to their torso, and the user's detected skeleton on top.
+ * Without a target the skeleton uses left/right colours; with one, each body part is coloured
+ * by how well it matches.
  */
 public class PoseOverlayView extends View {
 
@@ -36,26 +46,50 @@ public class PoseOverlayView extends View {
     private static final int[] JOINTS = {0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28};
 
     private static final float MIN_VISIBILITY = 0.5f;
+    private static final int GHOST_ALPHA = 0x70;
+    /** Smoothing for the ghost's anchor so it doesn't jitter with the detections. */
+    private static final float ANCHOR_ALPHA = 0.3f;
 
     private final PreviewTransform transform = new PreviewTransform();
+    private final SilhouetteRenderer ghostRenderer;
     private final Paint leftPaint;
     private final Paint rightPaint;
     private final Paint centerPaint;
+    private final Paint goodPaint;
+    private final Paint adjustPaint;
+    private final Paint offPaint;
     private final Paint jointFillPaint;
     private final float jointRadius;
 
-    @Nullable
-    private PoseFrame frame;
+    @Nullable private PoseFrame frame;
+    @Nullable private PoseTemplate target;
+    @Nullable private BodyPose targetMirrored;
+    private boolean useMirroredTarget;
+    @Nullable private Map<BodyPart, MatchResult.Status> partStatus;
+    private boolean showSkeleton = true;
+
+    private boolean anchorValid;
+    private float anchorX;
+    private float anchorY;
+    private float anchorScale;
 
     public PoseOverlayView(Context context, @Nullable AttributeSet attrs) {
         super(context, attrs);
         float density = getResources().getDisplayMetrics().density;
         jointRadius = 5f * density;
-        leftPaint = linePaint(ContextCompat.getColor(context, R.color.pose_left), density);
-        rightPaint = linePaint(ContextCompat.getColor(context, R.color.pose_right), density);
-        centerPaint = linePaint(ContextCompat.getColor(context, R.color.pose_center), density);
+        leftPaint = linePaint(color(R.color.pose_left), density);
+        rightPaint = linePaint(color(R.color.pose_right), density);
+        centerPaint = linePaint(color(R.color.pose_center), density);
+        goodPaint = linePaint(color(R.color.match_good), density);
+        adjustPaint = linePaint(color(R.color.match_adjust), density);
+        offPaint = linePaint(color(R.color.match_off), density);
         jointFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        jointFillPaint.setColor(ContextCompat.getColor(context, R.color.white));
+        jointFillPaint.setColor(color(R.color.white));
+        ghostRenderer = new SilhouetteRenderer(color(R.color.ghost_near), color(R.color.ghost_far));
+    }
+
+    private int color(int res) {
+        return ContextCompat.getColor(getContext(), res);
     }
 
     private static Paint linePaint(int color, float density) {
@@ -69,8 +103,28 @@ public class PoseOverlayView extends View {
     }
 
     /** Must be called on the main thread. */
+    public void setTarget(@Nullable PoseTemplate target) {
+        this.target = target;
+        this.targetMirrored = target != null && target.mirrorAllowed ? target.pose.mirrored() : null;
+        anchorValid = false;
+        invalidate();
+    }
+
+    /** Must be called on the main thread. */
     public void setPoseFrame(@Nullable PoseFrame frame) {
         this.frame = frame;
+        invalidate();
+    }
+
+    /** Per-part match colours and which side of the target matched. Main thread only. */
+    public void setMatchState(@Nullable Map<BodyPart, MatchResult.Status> partStatus,
+                              boolean useMirroredTarget) {
+        this.partStatus = partStatus;
+        this.useMirroredTarget = useMirroredTarget;
+    }
+
+    public void setShowSkeleton(boolean show) {
+        showSkeleton = show;
         invalidate();
     }
 
@@ -78,11 +132,67 @@ public class PoseOverlayView extends View {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         PoseFrame f = frame;
-        if (f == null || !f.hasPose) {
-            return;
+        boolean hasPerson = f != null && f.hasPose;
+        if (hasPerson) {
+            transform.update(f.imageWidth, f.imageHeight, getWidth(), getHeight(), f.mirrored);
         }
-        transform.update(f.imageWidth, f.imageHeight, getWidth(), getHeight(), f.mirrored);
+        if (target != null) {
+            drawGhost(canvas, hasPerson ? f : null);
+        }
+        if (hasPerson && showSkeleton) {
+            drawSkeleton(canvas, f);
+        }
+    }
 
+    private void drawGhost(Canvas canvas, @Nullable PoseFrame f) {
+        float x;
+        float y;
+        float scale;
+        boolean mirror;
+        if (f != null && f.visibility[Landmark.LEFT_HIP] >= MIN_VISIBILITY
+                && f.visibility[Landmark.RIGHT_HIP] >= MIN_VISIBILITY
+                && f.visibility[Landmark.LEFT_SHOULDER] >= MIN_VISIBILITY
+                && f.visibility[Landmark.RIGHT_SHOULDER] >= MIN_VISIBILITY) {
+            float hipX = (transform.mapX(f.x[Landmark.LEFT_HIP])
+                    + transform.mapX(f.x[Landmark.RIGHT_HIP])) / 2f;
+            float hipY = (transform.mapY(f.y[Landmark.LEFT_HIP])
+                    + transform.mapY(f.y[Landmark.RIGHT_HIP])) / 2f;
+            float shX = (transform.mapX(f.x[Landmark.LEFT_SHOULDER])
+                    + transform.mapX(f.x[Landmark.RIGHT_SHOULDER])) / 2f;
+            float shY = (transform.mapY(f.y[Landmark.LEFT_SHOULDER])
+                    + transform.mapY(f.y[Landmark.RIGHT_SHOULDER])) / 2f;
+            x = hipX;
+            y = hipY;
+            scale = (float) Math.hypot(shX - hipX, shY - hipY);
+            mirror = f.mirrored;
+        } else {
+            // Nobody to anchor to: show the pose where a well-framed person would stand.
+            boolean upper = target.framing == PoseTemplate.Framing.UPPER_BODY;
+            x = getWidth() / 2f;
+            y = getHeight() * (upper ? 0.98f : 0.6f);
+            scale = getHeight() * (upper ? 0.34f : 0.18f);
+            mirror = false;
+            anchorValid = false;
+        }
+
+        if (!anchorValid) {
+            anchorX = x;
+            anchorY = y;
+            anchorScale = scale;
+            anchorValid = f != null;
+        } else {
+            anchorX += ANCHOR_ALPHA * (x - anchorX);
+            anchorY += ANCHOR_ALPHA * (y - anchorY);
+            anchorScale += ANCHOR_ALPHA * (scale - anchorScale);
+        }
+
+        BodyPose pose = useMirroredTarget && targetMirrored != null ? targetMirrored : target.pose;
+        int save = canvas.saveLayerAlpha(0, 0, getWidth(), getHeight(), GHOST_ALPHA);
+        ghostRenderer.draw(canvas, pose, anchorX, anchorY, anchorScale, mirror);
+        canvas.restoreToCount(save);
+    }
+
+    private void drawSkeleton(Canvas canvas, PoseFrame f) {
         for (int[] connection : CONNECTIONS) {
             int a = connection[0];
             int b = connection[1];
@@ -104,6 +214,18 @@ public class PoseOverlayView extends View {
     }
 
     private Paint paintFor(int a, int b) {
+        Map<BodyPart, MatchResult.Status> status = partStatus;
+        if (target != null && status != null) {
+            MatchResult.Status s = status.get(partOf(a, b));
+            if (s == MatchResult.Status.GOOD) {
+                return goodPaint;
+            } else if (s == MatchResult.Status.ADJUST) {
+                return adjustPaint;
+            } else if (s == MatchResult.Status.OFF) {
+                return offPaint;
+            }
+            return centerPaint;
+        }
         if (isLeft(a) && isLeft(b)) {
             return leftPaint;
         }
@@ -111,6 +233,27 @@ public class PoseOverlayView extends View {
             return rightPaint;
         }
         return centerPaint;
+    }
+
+    /** Body part a skeleton segment (or joint, when a == b) is coloured by. */
+    private static BodyPart partOf(int a, int b) {
+        if (a == Landmark.NOSE && b == Landmark.NOSE) {
+            return BodyPart.HEAD;
+        }
+        if (isTorsoJoint(a) && isTorsoJoint(b)) {
+            return BodyPart.TORSO;
+        }
+        // Limb segments are named by their outer joint; odd indices are the person's left.
+        int outer = Math.max(a, b);
+        if (outer <= Landmark.RIGHT_INDEX + 2) {
+            return outer % 2 == 1 ? BodyPart.LEFT_ARM : BodyPart.RIGHT_ARM;
+        }
+        return outer % 2 == 1 ? BodyPart.LEFT_LEG : BodyPart.RIGHT_LEG;
+    }
+
+    private static boolean isTorsoJoint(int i) {
+        return i == Landmark.LEFT_SHOULDER || i == Landmark.RIGHT_SHOULDER
+                || i == Landmark.LEFT_HIP || i == Landmark.RIGHT_HIP;
     }
 
     private static boolean isLeft(int index) {

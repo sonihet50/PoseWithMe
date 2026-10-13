@@ -18,6 +18,17 @@
     <color name="scrim_light">#26FFFFFF</color>
     <color name="scrim_dark">#8C000000</color>
 
+    <!-- Mannequin silhouettes: near/far depth shades. -->
+    <color name="silhouette_near">#FFC4B2FF</color>
+    <color name="silhouette_far">#FF8470D6</color>
+    <color name="ghost_near">#FFFFFFFF</color>
+    <color name="ghost_far">#FFBDBDCC</color>
+
+    <!-- Pose-match status -->
+    <color name="match_good">#FF34D399</color>
+    <color name="match_adjust">#FFFBBF24</color>
+    <color name="match_off">#FFF87171</color>
+
     <!-- Skeleton colours: the person's own left side vs right side. -->
     <color name="pose_left">#FFFF8A3D</color>
     <color name="pose_right">#FF3DC8FF</color>

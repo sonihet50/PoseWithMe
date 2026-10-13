@@ -28,6 +28,9 @@
             </intent-filter>
         </activity>
         <activity
+            android:name=".ui.poses.PoseLibraryActivity"
+            android:exported="false" />
+        <activity
             android:name=".ui.camera.CameraActivity"
             android:exported="false"
             android:screenOrientation="portrait"

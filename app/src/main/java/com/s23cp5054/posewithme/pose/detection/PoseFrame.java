@@ -1,7 +1,10 @@
 package com.s23cp5054.posewithme.pose.detection;
 
+import androidx.annotation.Nullable;
+
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark;
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult;
+import com.s23cp5054.posewithme.pose.model.BodyPose;
 
 import java.util.List;
 
@@ -18,6 +21,8 @@ public final class PoseFrame {
     public final boolean hasPose;
     public final float[] x = new float[LANDMARK_COUNT];
     public final float[] y = new float[LANDMARK_COUNT];
+    /** MediaPipe's relative depth, scaled like x; smaller is closer to the camera. */
+    public final float[] z = new float[LANDMARK_COUNT];
     public final float[] visibility = new float[LANDMARK_COUNT];
     public final int imageWidth;
     public final int imageHeight;
@@ -44,8 +49,16 @@ public final class PoseFrame {
                 NormalizedLandmark landmark = landmarks.get(i);
                 x[i] = landmark.x();
                 y[i] = landmark.y();
+                z[i] = landmark.z();
                 visibility[i] = landmark.visibility().orElse(1f);
             }
         }
+    }
+
+    /** This detection in the body frame, or null if shoulders/hips weren't seen well enough. */
+    @Nullable
+    public BodyPose toBodyPose() {
+        return hasPose ? BodyPose.fromImageLandmarks(x, y, z, visibility, imageWidth, imageHeight)
+                : null;
     }
 }

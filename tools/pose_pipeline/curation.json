@@ -1,0 +1,226 @@
+[
+  {
+    "openverse": "4ef72be1",
+    "id": "one-hand-on-hip",
+    "name": "One hand on hip",
+    "category": "casual_standing",
+    "difficulty": "easy",
+    "framing": "full_body",
+    "description": "A confident everyday stance that works almost anywhere.",
+    "instructions": [
+      "Stand with your feet about hip-width apart",
+      "Rest one hand on your hip with the elbow pointing out",
+      "Let the other arm hang relaxed"
+    ],
+    "scenes": [
+      "street",
+      "park",
+      "monument",
+      "indoor"
+    ]
+  },
+  {
+    "openverse": "dfb1a696",
+    "id": "hands-on-hips",
+    "name": "Hands on hips",
+    "category": "casual_standing",
+    "difficulty": "easy",
+    "framing": "full_body",
+    "description": "A strong, square-on pose for bold outfits and colourful walls.",
+    "instructions": [
+      "Face the camera squarely",
+      "Put both hands at your waist",
+      "Keep your shoulders relaxed and down"
+    ],
+    "scenes": [
+      "street",
+      "park",
+      "indoor"
+    ]
+  },
+  {
+    "openverse": "9bb474dc",
+    "id": "cross-legged-lean",
+    "name": "Cross-legged lean",
+    "category": "crossed_arms",
+    "difficulty": "medium",
+    "framing": "full_body",
+    "description": "A classic relaxed lean against a pillar, wall or lamp post.",
+    "instructions": [
+      "Lean one shoulder against a pillar or wall",
+      "Fold your arms across your chest",
+      "Cross one ankle over the other"
+    ],
+    "scenes": [
+      "monument",
+      "street",
+      "cafe"
+    ]
+  },
+  {
+    "openverse": "2966ece1",
+    "id": "railing-lean",
+    "name": "Railing lean",
+    "category": "scenic",
+    "difficulty": "easy",
+    "framing": "full_body",
+    "description": "An easy, natural pose in front of a view.",
+    "instructions": [
+      "Stand beside a railing or post with the view behind you",
+      "Rest one hand on the railing",
+      "Let your other hand rest at your side or in a pocket"
+    ],
+    "scenes": [
+      "scenic",
+      "beach",
+      "monument"
+    ]
+  },
+  {
+    "openverse": "4bc275b0",
+    "id": "walk-and-wave",
+    "name": "Walk and wave",
+    "category": "walking",
+    "difficulty": "medium",
+    "framing": "full_body",
+    "description": "A happy candid walking shot towards the camera.",
+    "instructions": [
+      "Walk slowly towards the camera",
+      "Lift one hand near your face as if waving hello",
+      "Keep your stride small and natural"
+    ],
+    "scenes": [
+      "street",
+      "park"
+    ]
+  },
+  {
+    "openverse": "88101a56",
+    "id": "easy-stroll",
+    "name": "Easy stroll",
+    "category": "walking",
+    "difficulty": "easy",
+    "framing": "full_body",
+    "description": "A calm mid-stride walking pose.",
+    "instructions": [
+      "Walk towards the camera at an easy pace",
+      "Let your arms swing naturally",
+      "The photographer should shoot mid-step"
+    ],
+    "scenes": [
+      "street",
+      "park",
+      "beach"
+    ]
+  },
+  {
+    "openverse": "f75dbbd8",
+    "id": "stairs-sit",
+    "name": "Sitting on the steps",
+    "category": "sitting",
+    "difficulty": "easy",
+    "framing": "full_body",
+    "description": "A grounded seated pose for staircases and steps.",
+    "instructions": [
+      "Sit on a step facing the camera",
+      "Plant your feet apart on a lower step",
+      "Rest your forearms on your knees"
+    ],
+    "scenes": [
+      "street",
+      "monument",
+      "indoor"
+    ]
+  },
+  {
+    "openverse": "8006aa6c",
+    "id": "monument-steps",
+    "name": "Monument steps",
+    "category": "monument",
+    "difficulty": "easy",
+    "framing": "full_body",
+    "description": "Sit on the steps of a landmark so it fills the frame behind you.",
+    "instructions": [
+      "Sit on the steps with the building behind you",
+      "Stretch one leg down a step and bend the other",
+      "Rest your hands on your knees"
+    ],
+    "scenes": [
+      "monument"
+    ]
+  },
+  {
+    "openverse": "715a12bd",
+    "id": "thinker-on-a-rock",
+    "name": "Thinker on a rock",
+    "category": "scenic",
+    "difficulty": "medium",
+    "framing": "full_body",
+    "description": "A thoughtful seated pose for hikes and viewpoints.",
+    "instructions": [
+      "Sit on a rock or low wall",
+      "Rest an elbow on your knee",
+      "Prop your chin on your hand and look off to the side"
+    ],
+    "scenes": [
+      "scenic",
+      "park",
+      "beach"
+    ]
+  },
+  {
+    "openverse": "2d5fb247",
+    "id": "bench-lounge",
+    "name": "Bench lounge",
+    "category": "sitting",
+    "difficulty": "easy",
+    "framing": "full_body",
+    "description": "A laid-back seated pose for park benches.",
+    "instructions": [
+      "Sit back on a bench and lean into the backrest",
+      "Stretch your legs out in front of you",
+      "Rest your hands in your lap"
+    ],
+    "scenes": [
+      "park",
+      "cafe"
+    ]
+  },
+  {
+    "openverse": "3c56881c",
+    "id": "hand-behind-head",
+    "name": "Hand behind head",
+    "category": "portrait",
+    "difficulty": "easy",
+    "framing": "upper_body",
+    "description": "A relaxed upper-body portrait with a lifted arm.",
+    "instructions": [
+      "Face the camera from the waist up",
+      "Raise one hand behind your head",
+      "Let the other arm hang loosely"
+    ],
+    "scenes": [
+      "street",
+      "indoor",
+      "cafe"
+    ]
+  },
+  {
+    "openverse": "7445ebc6",
+    "id": "arms-to-the-sky",
+    "name": "Arms to the sky",
+    "category": "beach",
+    "difficulty": "easy",
+    "framing": "upper_body",
+    "description": "Celebrate a big view or a sunset with both arms up.",
+    "instructions": [
+      "Stand with the view behind you",
+      "Raise both arms up and out in a V",
+      "Lift your chin a little"
+    ],
+    "scenes": [
+      "beach",
+      "scenic"
+    ]
+  }
+]

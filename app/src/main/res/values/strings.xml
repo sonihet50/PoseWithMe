@@ -22,6 +22,95 @@
     <string name="badge_soon">SOON</string>
     <string name="coming_soon">%1$s is coming in a later build.</string>
 
+    <string name="back">Back</string>
+    <string name="library_record">Record a pose</string>
+    <string name="library_empty">No poses yet. Record one to get started.</string>
+    <plurals name="library_count">
+        <item quantity="one">%d pose</item>
+        <item quantity="other">%d poses</item>
+    </plurals>
+    <string name="badge_yours">YOURS</string>
+    <string name="detail_try_pose">Try this pose</string>
+    <string name="attribution_web">Pose traced from “%1$s” by %2$s, %3$s. The photo itself is not included in the app.</string>
+    <string name="attribution_recorded">Recorded by the PoseWithMe team.</string>
+    <string name="attribution_user">Recorded on this phone.</string>
+    <string name="meta_separator">" · "</string>
+
+    <string name="framing_full_body">Full body</string>
+    <string name="framing_upper_body">Upper body</string>
+    <string name="difficulty_easy">Easy</string>
+    <string name="difficulty_medium">Medium</string>
+    <string name="difficulty_hard">Hard</string>
+
+    <string name="category_casual_standing">Casual standing</string>
+    <string name="category_hands_in_pockets">Hands in pockets</string>
+    <string name="category_crossed_arms">Crossed arms</string>
+    <string name="category_walking">Walking</string>
+    <string name="category_looking_back">Looking back</string>
+    <string name="category_sitting">Sitting</string>
+    <string name="category_portrait">Portrait</string>
+    <string name="category_beach">Beach</string>
+    <string name="category_monument">Monument &amp; architecture</string>
+    <string name="category_scenic">Scenic &amp; nature</string>
+    <string name="category_cafe">Café &amp; indoor</string>
+
+    <!-- Guidance. %1$s is "left"/"right" from the person's own point of view. -->
+    <string name="side_left">left</string>
+    <string name="side_right">right</string>
+    <string name="hint_slightly">%1$s a little</string>
+    <string name="hint_raise_arm">Raise your %1$s arm</string>
+    <string name="hint_lower_arm">Lower your %1$s arm</string>
+    <string name="hint_bend_elbow">Bend your %1$s elbow more</string>
+    <string name="hint_straighten_arm">Straighten your %1$s arm</string>
+    <string name="hint_arm_out">Move your %1$s arm out to the side</string>
+    <string name="hint_arm_in">Bring your %1$s arm in</string>
+    <string name="hint_raise_leg">Lift your %1$s knee</string>
+    <string name="hint_lower_leg">Lower your %1$s leg</string>
+    <string name="hint_bend_knee">Bend your %1$s knee</string>
+    <string name="hint_straighten_leg">Straighten your %1$s leg</string>
+    <string name="hint_leg_out">Step your %1$s foot out</string>
+    <string name="hint_leg_in">Bring your %1$s foot in</string>
+    <string name="hint_lean_left">Lean towards your left</string>
+    <string name="hint_lean_right">Lean towards your right</string>
+    <string name="hint_stand_straight">Stand up straight</string>
+    <string name="hint_turn_body">Turn your body a bit to the side</string>
+    <string name="hint_face_camera">Turn to face the camera</string>
+    <string name="hint_tilt_head_left">Tilt your head to your left</string>
+    <string name="hint_tilt_head_right">Tilt your head to your right</string>
+    <string name="hint_head_up">Lift your chin</string>
+    <string name="hint_head_down">Lower your chin</string>
+    <string name="hint_hold_it">Perfect, hold it!</string>
+    <string name="hint_step_back_full">Step back so your whole body is in view</string>
+    <string name="hint_step_back_upper">Move so your upper body is in view</string>
+
+    <string name="match_percent">%1$d%% match</string>
+    <string name="part_pill">● %1$s</string>
+    <string name="part_head">Head</string>
+    <string name="part_torso">Torso</string>
+    <string name="part_left_arm">L arm</string>
+    <string name="part_right_arm">R arm</string>
+    <string name="part_left_leg">L leg</string>
+    <string name="part_right_leg">R leg</string>
+    <string name="camera_choose_pose">CHOOSE A POSE</string>
+    <string name="camera_change_pose">Change pose</string>
+
+    <!-- Recording -->
+    <string name="record_mode_label">RECORD A POSE</string>
+    <string name="record_ready">Tap the button, then get into position</string>
+    <string name="record_hold_still">Hold still…</string>
+    <string name="record_timed_out">Couldn’t catch a still pose. Try again, with your shoulders and hips in view.</string>
+    <string name="record_save_title">Save your pose</string>
+    <string name="record_name_hint">Pose name</string>
+    <string name="record_default_name">My pose</string>
+    <string name="record_category_label">Category</string>
+    <string name="record_mirror_allowed">Can be done with either side</string>
+    <string name="record_detected_framing">Detected framing: %1$s</string>
+    <string name="record_save">Save</string>
+    <string name="record_discard">Discard</string>
+    <string name="record_saved">Saved to your poses</string>
+    <string name="record_try_it">Try it</string>
+    <string name="record_save_failed">Could not save the pose: %1$s</string>
+
     <string name="camera_close">Close camera</string>
     <string name="camera_grid">Toggle grid</string>
     <string name="camera_stats">Toggle performance stats</string>
