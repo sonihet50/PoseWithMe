@@ -2,6 +2,7 @@ package com.s23cp5054.posewithme.ui.camera;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
+import android.content.res.ColorStateList;
 import android.os.Bundle;
 import android.os.Debug;
 import android.os.Handler;
@@ -10,6 +11,7 @@ import android.os.SystemClock;
 import android.util.Log;
 import android.util.Size;
 import android.view.View;
+import android.widget.ImageButton;
 import android.widget.TextView;
 
 import androidx.activity.EdgeToEdge;
@@ -31,8 +33,11 @@ import androidx.camera.view.PreviewView;
 import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
+import com.google.android.material.snackbar.Snackbar;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.s23cp5054.posewithme.R;
 import com.s23cp5054.posewithme.pose.detection.PoseDetector;
@@ -102,13 +107,33 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
         statsText = findViewById(R.id.statsText);
         statusText = findViewById(R.id.statusText);
 
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.hud), (v, insets) -> {
-            Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+        hideStatusBar();
+
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.cameraRoot), (v, insets) -> {
+            Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars()
+                    | WindowInsetsCompat.Type.displayCutout());
+            findViewById(R.id.topBar).setPadding(bars.left, bars.top, bars.right, 0);
+            findViewById(R.id.bottomBar).setPadding(bars.left, 0, bars.right, bars.bottom);
             return insets;
         });
 
-        findViewById(R.id.flipButton).setOnClickListener(v -> flipCamera());
+        View flipButton = findViewById(R.id.flipButton);
+        flipButton.setOnClickListener(v -> {
+            v.animate().rotationBy(180f).setDuration(250).start();
+            flipCamera();
+        });
+        findViewById(R.id.closeButton).setOnClickListener(v -> finish());
+        findViewById(R.id.gridButton).setOnClickListener(v -> toggleVisibility(
+                findViewById(R.id.gridOverlay), (ImageButton) v));
+        findViewById(R.id.statsButton).setOnClickListener(v -> toggleVisibility(
+                statsText, (ImageButton) v));
+        findViewById(R.id.shutterButton).setOnClickListener(v -> Snackbar.make(
+                findViewById(R.id.bottomBar), R.string.camera_capture_soon, Snackbar.LENGTH_SHORT)
+                .show());
+        findViewById(R.id.galleryButton).setOnClickListener(v -> Snackbar.make(
+                findViewById(R.id.bottomBar),
+                getString(R.string.coming_soon, getString(R.string.home_photos_title)),
+                Snackbar.LENGTH_SHORT).show());
 
         analysisExecutor = Executors.newSingleThreadExecutor();
         analysisExecutor.execute(this::loadDetector);
@@ -119,6 +144,23 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
         } else {
             cameraPermissionLauncher.launch(Manifest.permission.CAMERA);
         }
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        // Some OEM skins re-show the status bar once the window is attached or refocused.
+        if (hasFocus) {
+            hideStatusBar();
+        }
+    }
+
+    private void hideStatusBar() {
+        WindowInsetsControllerCompat controller =
+                WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        controller.setSystemBarsBehavior(
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        controller.hide(WindowInsetsCompat.Type.statusBars());
     }
 
     @Override
@@ -279,6 +321,13 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
     public void onDetectorError(String message) {
         Log.e(TAG, "Pose detector error: " + message);
         mainHandler.post(() -> showStatus(getString(R.string.camera_detector_error, message)));
+    }
+
+    private void toggleVisibility(View target, ImageButton toggle) {
+        boolean show = target.getVisibility() != View.VISIBLE;
+        target.setVisibility(show ? View.VISIBLE : View.GONE);
+        toggle.setImageTintList(ColorStateList.valueOf(ContextCompat.getColor(this,
+                show ? R.color.brand_accent : R.color.white)));
     }
 
     private void showStatus(String message) {

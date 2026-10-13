@@ -1,8 +1,13 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <style name="Base.Theme.PoseWithMe" parent="Theme.Material3.DayNight.NoActionBar">
+<resources>
+    <style name="Base.Theme.PoseWithMe" parent="Theme.Material3.Dark.NoActionBar">
         <item name="colorPrimary">@color/brand_primary</item>
         <item name="colorOnPrimary">@color/white</item>
         <item name="colorSecondary">@color/brand_accent</item>
+        <item name="android:colorBackground">@color/surface_background</item>
+        <item name="colorSurface">@color/surface_background</item>
+        <item name="colorOnSurface">@color/text_primary</item>
+        <item name="colorOnSurfaceVariant">@color/text_secondary</item>
+        <item name="android:windowBackground">@color/surface_background</item>
     </style>
 
     <style name="Theme.PoseWithMe" parent="Base.Theme.PoseWithMe" />
@@ -10,4 +15,10 @@
     <style name="Theme.PoseWithMe.Camera" parent="Theme.PoseWithMe">
         <item name="android:windowBackground">@color/black</item>
     </style>
+
+    <style name="TextAppearance.PoseWithMe.SectionTitle" parent="TextAppearance.Material3.TitleMedium">
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
 </resources>

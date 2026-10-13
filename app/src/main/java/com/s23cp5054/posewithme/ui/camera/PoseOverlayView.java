@@ -19,15 +19,21 @@ import com.s23cp5054.posewithme.pose.detection.PoseFrame;
  */
 public class PoseOverlayView extends View {
 
-    /** MediaPipe Pose landmark pairs that form the skeleton. */
+    /**
+     * MediaPipe Pose landmark pairs drawn as the skeleton. Face points and finger detail are
+     * left out to keep the guide readable; one wrist-to-index and ankle-to-toe segment still
+     * shows which way hands and feet point.
+     */
     private static final int[][] CONNECTIONS = {
-            {0, 1}, {1, 2}, {2, 3}, {3, 7}, {0, 4}, {4, 5}, {5, 6}, {6, 8}, {9, 10},
-            {11, 12}, {11, 13}, {13, 15}, {15, 17}, {15, 19}, {15, 21}, {17, 19},
-            {12, 14}, {14, 16}, {16, 18}, {16, 20}, {16, 22}, {18, 20},
+            {11, 12}, {11, 13}, {13, 15}, {15, 19},
+            {12, 14}, {14, 16}, {16, 20},
             {11, 23}, {12, 24}, {23, 24},
-            {23, 25}, {25, 27}, {27, 29}, {29, 31}, {27, 31},
-            {24, 26}, {26, 28}, {28, 30}, {30, 32}, {28, 32},
+            {23, 25}, {25, 27}, {27, 31},
+            {24, 26}, {26, 28}, {28, 32},
     };
+
+    /** Nose, shoulders, elbows, wrists, hips, knees, ankles. */
+    private static final int[] JOINTS = {0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28};
 
     private static final float MIN_VISIBILITY = 0.5f;
 
@@ -35,6 +41,7 @@ public class PoseOverlayView extends View {
     private final Paint leftPaint;
     private final Paint rightPaint;
     private final Paint centerPaint;
+    private final Paint jointFillPaint;
     private final float jointRadius;
 
     @Nullable
@@ -43,18 +50,21 @@ public class PoseOverlayView extends View {
     public PoseOverlayView(Context context, @Nullable AttributeSet attrs) {
         super(context, attrs);
         float density = getResources().getDisplayMetrics().density;
-        jointRadius = 4f * density;
+        jointRadius = 5f * density;
         leftPaint = linePaint(ContextCompat.getColor(context, R.color.pose_left), density);
         rightPaint = linePaint(ContextCompat.getColor(context, R.color.pose_right), density);
         centerPaint = linePaint(ContextCompat.getColor(context, R.color.pose_center), density);
+        jointFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        jointFillPaint.setColor(ContextCompat.getColor(context, R.color.white));
     }
 
     private static Paint linePaint(int color, float density) {
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         paint.setColor(color);
-        paint.setStrokeWidth(4f * density);
+        paint.setAlpha(230);
+        paint.setStrokeWidth(3.5f * density);
         paint.setStrokeCap(Paint.Cap.ROUND);
-        paint.setStyle(Paint.Style.FILL_AND_STROKE);
+        paint.setStyle(Paint.Style.STROKE);
         return paint;
     }
 
@@ -82,12 +92,14 @@ public class PoseOverlayView extends View {
             canvas.drawLine(transform.mapX(f.x[a]), transform.mapY(f.y[a]),
                     transform.mapX(f.x[b]), transform.mapY(f.y[b]), paintFor(a, b));
         }
-        for (int i = 0; i < PoseFrame.LANDMARK_COUNT; i++) {
+        for (int i : JOINTS) {
             if (f.visibility[i] < MIN_VISIBILITY) {
                 continue;
             }
-            canvas.drawCircle(transform.mapX(f.x[i]), transform.mapY(f.y[i]), jointRadius,
-                    paintFor(i, i));
+            float cx = transform.mapX(f.x[i]);
+            float cy = transform.mapY(f.y[i]);
+            canvas.drawCircle(cx, cy, jointRadius, jointFillPaint);
+            canvas.drawCircle(cx, cy, jointRadius, paintFor(i, i));
         }
     }
 

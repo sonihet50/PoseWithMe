@@ -2,13 +2,24 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
-    <color name="brand_primary">#FF6A3DE8</color>
-    <color name="brand_primary_dark">#FFC4B2FF</color>
+
+    <!-- Brand -->
+    <color name="brand_primary">#FF8B6CFF</color>
     <color name="brand_accent">#FFFF8A3D</color>
+    <color name="brand_teal">#FF2ED3B7</color>
+    <color name="brand_pink">#FFFF5C8A</color>
+    <color name="brand_sky">#FF3DC8FF</color>
+
+    <!-- Surfaces (the app is dark-only, like most camera apps) -->
+    <color name="surface_background">#FF0E0E13</color>
+    <color name="surface_card">#FF1A1A22</color>
+    <color name="text_primary">#FFF4F4F8</color>
+    <color name="text_secondary">#FFA3A3B2</color>
+    <color name="scrim_light">#26FFFFFF</color>
+    <color name="scrim_dark">#8C000000</color>
 
     <!-- Skeleton colours: the person's own left side vs right side. -->
     <color name="pose_left">#FFFF8A3D</color>
     <color name="pose_right">#FF3DC8FF</color>
     <color name="pose_center">#FFFFFFFF</color>
-    <color name="hud_background">#99000000</color>
 </resources>
