@@ -112,6 +112,43 @@
             android:textColor="@color/white"
             android:textSize="14sp" />
 
+        <com.google.android.material.button.MaterialButtonToggleGroup
+            android:id="@+id/framingToggle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|center_horizontal"
+            android:layout_marginTop="14dp"
+            android:visibility="gone"
+            app:checkedButton="@id/framingFull"
+            app:selectionRequired="true"
+            app:singleSelection="true"
+            tools:visibility="visible">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/framingFull"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/framing_full_body"
+                android:textColor="@color/white" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/framingHalf"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/framing_half_body"
+                android:textColor="@color/white" />
+        </com.google.android.material.button.MaterialButtonToggleGroup>
+
+        <View
+            android:id="@+id/flashView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:alpha="0"
+            android:background="@color/white"
+            android:visibility="gone" />
+
         <TextView
             android:id="@+id/countdownText"
             android:layout_width="wrap_content"
@@ -224,6 +261,7 @@
             android:layout_height="52dp"
             android:background="@drawable/bg_camera_round_button"
             android:contentDescription="@string/camera_gallery"
+            android:outlineProvider="background"
             android:padding="14dp"
             android:scaleType="fitCenter"
             android:src="@drawable/ic_gallery"

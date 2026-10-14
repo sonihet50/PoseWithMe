@@ -7,6 +7,19 @@
         android:required="true" />
 
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Nearby suggestions: place lookup (OpenStreetMap) and location. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Saving to shared Pictures needs this only on Android 9 and older. -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+
+    <uses-feature
+        android:name="android.hardware.location"
+        android:required="false" />
 
     <application
         android:allowBackup="true"
@@ -29,6 +42,19 @@
         </activity>
         <activity
             android:name=".ui.poses.PoseLibraryActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ui.gallery.GalleryActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ui.gallery.PhotoActivity"
+            android:exported="false"
+            android:theme="@style/Theme.PoseWithMe.Camera" />
+        <activity
+            android:name=".ui.settings.SettingsActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ui.nearby.NearbyActivity"
             android:exported="false" />
         <activity
             android:name=".ui.camera.CameraActivity"

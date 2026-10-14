@@ -55,10 +55,16 @@ public final class PoseFrame {
         }
     }
 
-    /** This detection in the body frame, or null if shoulders/hips weren't seen well enough. */
+    /**
+     * This detection in the body frame, or null if shoulders/hips weren't seen well enough.
+     * With {@code waistUp}, hips just out of frame are accepted using MediaPipe's estimate.
+     */
     @Nullable
-    public BodyPose toBodyPose() {
-        return hasPose ? BodyPose.fromImageLandmarks(x, y, z, visibility, imageWidth, imageHeight)
-                : null;
+    public BodyPose toBodyPose(boolean waistUp) {
+        if (!hasPose) {
+            return null;
+        }
+        return BodyPose.fromImageLandmarks(x, y, z, visibility, imageWidth, imageHeight,
+                waistUp ? BodyPose.MIN_HIDDEN_HIP_VISIBILITY : BodyPose.MIN_FRAME_VISIBILITY);
     }
 }

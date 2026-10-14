@@ -4,6 +4,7 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
+import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.os.Debug;
 import android.os.Handler;
@@ -12,12 +13,14 @@ import android.os.SystemClock;
 import android.util.Log;
 import android.util.Size;
 import android.util.TypedValue;
+import android.view.HapticFeedbackConstants;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -25,14 +28,19 @@ import android.widget.TextView;
 import androidx.activity.EdgeToEdge;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.camera.core.CameraInfoUnavailableException;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ImageAnalysis;
+import androidx.camera.core.ImageCapture;
+import androidx.camera.core.ImageCaptureException;
 import androidx.camera.core.ImageProxy;
 import androidx.camera.core.Preview;
 import androidx.camera.core.ResolutionInfo;
+import androidx.camera.core.UseCaseGroup;
+import androidx.camera.core.ViewPort;
 import androidx.camera.core.resolutionselector.AspectRatioStrategy;
 import androidx.camera.core.resolutionselector.ResolutionSelector;
 import androidx.camera.core.resolutionselector.ResolutionStrategy;
@@ -45,25 +53,33 @@ import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 
+import com.google.android.material.button.MaterialButtonToggleGroup;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.snackbar.Snackbar;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.s23cp5054.posewithme.R;
+import com.s23cp5054.posewithme.data.model.Photo;
+import com.s23cp5054.posewithme.data.repository.PhotoRepository;
 import com.s23cp5054.posewithme.data.repository.PoseRepository;
+import com.s23cp5054.posewithme.data.settings.AppSettings;
 import com.s23cp5054.posewithme.pose.detection.PoseDetector;
 import com.s23cp5054.posewithme.pose.detection.PoseFrame;
+import com.s23cp5054.posewithme.pose.matching.AutoCaptureTrigger;
 import com.s23cp5054.posewithme.pose.matching.BodyPart;
 import com.s23cp5054.posewithme.pose.matching.GuidanceSmoother;
 import com.s23cp5054.posewithme.pose.matching.MatchConfig;
 import com.s23cp5054.posewithme.pose.matching.MatchResult;
 import com.s23cp5054.posewithme.pose.matching.PoseMatcher;
 import com.s23cp5054.posewithme.pose.model.BodyPose;
-import com.s23cp5054.posewithme.pose.model.Landmark;
 import com.s23cp5054.posewithme.pose.model.PoseTemplate;
 import com.s23cp5054.posewithme.pose.recording.PoseRecorder;
+import com.s23cp5054.posewithme.storage.PhotoStorage;
+import com.s23cp5054.posewithme.ui.gallery.GalleryActivity;
+import com.s23cp5054.posewithme.ui.gallery.PhotoActivity;
 import com.s23cp5054.posewithme.ui.pose.PoseThumbnailView;
 import com.s23cp5054.posewithme.ui.poses.PoseLabels;
 import com.s23cp5054.posewithme.ui.poses.PoseLibraryActivity;
+import com.s23cp5054.posewithme.utils.ImageLoader;
 import com.s23cp5054.posewithme.utils.PerfStats;
 
 import org.json.JSONException;
@@ -80,7 +96,8 @@ import java.util.concurrent.Executors;
 /**
  * The live camera: CameraX preview with on-device pose detection drawn on top. Three modes:
  * free (just the skeleton), guide (a target pose ghost with live score and corrections) and
- * record (capture the user's own pose into the library).
+ * record (capture the user's own pose into the library). Photos can be taken in free and guide
+ * mode, manually (with an optional self-timer) or automatically once the pose is matched.
  */
 public class CameraActivity extends AppCompatActivity implements PoseDetector.Listener {
 
@@ -95,7 +112,7 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
     /** Analysis frames don't need to be large: the model itself runs at 256x256. */
     private static final Size ANALYSIS_TARGET_SIZE = new Size(640, 480);
     private static final long STATS_INTERVAL_MS = 1000;
-    private static final long RECORD_TICK_MS = 100;
+    private static final long TICK_MS = 100;
     /** Smoothed score at which the user is told to hold the pose. */
     private static final float HOLD_IT_SCORE = 0.85f;
     private static final String[] CATEGORY_KEYS = {
@@ -116,6 +133,9 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
     private LinearLayout partsRow;
     private TextView modeLabel;
     private ImageButton shutterButton;
+    private ImageButton galleryButton;
+    private MaterialButtonToggleGroup framingToggle;
+    private View flashView;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final PerfStats perfStats = new PerfStats();
@@ -123,22 +143,33 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
     private final PoseMatcher matcher = new PoseMatcher(matchConfig);
     private final GuidanceSmoother smoother = new GuidanceSmoother(matchConfig);
     private final PoseRecorder recorder = new PoseRecorder();
+    private final AutoCaptureTrigger autoCapture = new AutoCaptureTrigger(0.85f);
     private final Map<BodyPart, TextView> partPills = new EnumMap<>(BodyPart.class);
     private ExecutorService analysisExecutor;
     private final ExecutorService ioExecutor = Executors.newSingleThreadExecutor();
+    private AppSettings settings;
 
     @Nullable
     private ProcessCameraProvider cameraProvider;
+    @Nullable
+    private ImageCapture imageCapture;
     private volatile PoseDetector poseDetector;
     private volatile boolean frontCamera;
     /** Read on the MediaPipe thread for matching; written on the main thread. */
     @Nullable
     private volatile PoseTemplate target;
+    /** Accept hips just below the frame (half-body framing); read on the MediaPipe thread. */
+    private volatile boolean waistUp;
     private Mode mode = Mode.FREE;
     private int lensFacing = CameraSelector.LENS_FACING_FRONT;
     private String resolutionSummary = "";
     private boolean showingNoPerson;
     private boolean modelReady;
+    private boolean showHints = true;
+    private boolean autoCaptureEnabled;
+    /** Uptime at which the self-timer fires, or -1 when no countdown is running. */
+    private long captureAtMs = -1;
+    private boolean capturing;
 
     private final ActivityResultLauncher<String> cameraPermissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
@@ -146,6 +177,16 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
                     startCamera();
                 } else {
                     showStatus(getString(R.string.camera_permission_denied));
+                }
+            });
+
+    private final ActivityResultLauncher<String> storagePermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
+                if (granted) {
+                    takePhoto();
+                } else {
+                    Snackbar.make(galleryButton, R.string.camera_storage_denied,
+                            Snackbar.LENGTH_LONG).show();
                 }
             });
 
@@ -172,8 +213,27 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
             updateRecordingUi();
             PoseRecorder.State state = recorder.getState();
             if (state == PoseRecorder.State.COUNTDOWN || state == PoseRecorder.State.HOLD_STILL) {
-                mainHandler.postDelayed(this, RECORD_TICK_MS);
+                mainHandler.postDelayed(this, TICK_MS);
             }
+        }
+    };
+
+    private final Runnable captureTicker = new Runnable() {
+        @Override
+        public void run() {
+            if (captureAtMs < 0) {
+                return;
+            }
+            long left = captureAtMs - SystemClock.uptimeMillis();
+            if (left <= 0) {
+                captureAtMs = -1;
+                countdownText.setVisibility(View.GONE);
+                takePhoto();
+                return;
+            }
+            countdownText.setVisibility(View.VISIBLE);
+            countdownText.setText(String.valueOf((left + 999) / 1000));
+            mainHandler.postDelayed(this, TICK_MS);
         }
     };
 
@@ -182,6 +242,7 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
         super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_camera);
+        settings = new AppSettings(this);
 
         previewView = findViewById(R.id.previewView);
         poseOverlay = findViewById(R.id.poseOverlay);
@@ -194,6 +255,9 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
         partsRow = findViewById(R.id.partsRow);
         modeLabel = findViewById(R.id.modeLabel);
         shutterButton = findViewById(R.id.shutterButton);
+        galleryButton = findViewById(R.id.galleryButton);
+        framingToggle = findViewById(R.id.framingToggle);
+        flashView = findViewById(R.id.flashView);
         buildPartPills();
 
         hideStatusBar();
@@ -206,8 +270,7 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
             return insets;
         });
 
-        View flipButton = findViewById(R.id.flipButton);
-        flipButton.setOnClickListener(v -> {
+        findViewById(R.id.flipButton).setOnClickListener(v -> {
             v.animate().rotationBy(180f).setDuration(250).start();
             flipCamera();
         });
@@ -217,14 +280,18 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
         findViewById(R.id.statsButton).setOnClickListener(v -> toggleVisibility(
                 statsText, (ImageButton) v));
         shutterButton.setOnClickListener(v -> onShutter());
-        findViewById(R.id.galleryButton).setOnClickListener(v -> Snackbar.make(
-                findViewById(R.id.bottomBar),
-                getString(R.string.coming_soon, getString(R.string.home_photos_title)),
-                Snackbar.LENGTH_SHORT).show());
+        galleryButton.setOnClickListener(v ->
+                startActivity(new Intent(this, GalleryActivity.class)));
         modeLabel.setOnClickListener(v -> {
             if (mode != Mode.RECORD) {
                 pickPoseLauncher.launch(new Intent(this, PoseLibraryActivity.class)
                         .putExtra(PoseLibraryActivity.EXTRA_PICK_MODE, true));
+            }
+        });
+        framingToggle.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
+            if (isChecked && mode == Mode.RECORD) {
+                waistUp = checkedId == R.id.framingHalf;
+                updateRecordingUi();
             }
         });
 
@@ -269,6 +336,14 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
     @Override
     protected void onResume() {
         super.onResume();
+        showHints = settings.isShowHints();
+        autoCaptureEnabled = settings.isAutoCapture();
+        autoCapture.setThreshold(settings.getAutoCaptureThreshold());
+        // Coming back from photo review with the pose still held must not fire again.
+        autoCapture.disarm();
+        poseOverlay.setShowGhost(settings.isShowGhost());
+        poseOverlay.setShowSkeleton(settings.isShowSkeleton());
+        refreshGalleryThumbnail();
         mainHandler.post(statsTicker);
     }
 
@@ -276,6 +351,7 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
     protected void onPause() {
         super.onPause();
         mainHandler.removeCallbacks(statsTicker);
+        cancelCaptureCountdown();
         if (mode == Mode.RECORD && recorder.getState() != PoseRecorder.State.IDLE) {
             recorder.cancel();
             mainHandler.removeCallbacks(recordTicker);
@@ -307,28 +383,34 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
     private void enterFreeMode() {
         mode = Mode.FREE;
         target = null;
+        waistUp = false;
         poseOverlay.setTarget(null);
         poseOverlay.setMatchState(null, false);
         modeLabel.setText(R.string.camera_choose_pose);
         shutterButton.setBackgroundResource(R.drawable.bg_shutter);
+        shutterButton.setContentDescription(getString(R.string.camera_shutter));
         guidancePanel.setVisibility(View.GONE);
         matchChip.setVisibility(View.GONE);
+        framingToggle.setVisibility(View.GONE);
     }
 
     private void enterGuideMode(PoseTemplate pose) {
         mode = Mode.GUIDE;
         smoother.reset();
+        autoCapture.reset();
+        waistUp = pose.framing == PoseTemplate.Framing.UPPER_BODY;
         target = pose;
         poseOverlay.setTarget(pose);
         poseOverlay.setMatchState(null, false);
         modeLabel.setText(pose.name.toUpperCase(Locale.getDefault()));
         modeLabel.setContentDescription(getString(R.string.camera_change_pose));
         shutterButton.setBackgroundResource(R.drawable.bg_shutter);
+        shutterButton.setContentDescription(getString(R.string.camera_shutter));
         statusText.setVisibility(View.GONE);
         countdownText.setVisibility(View.GONE);
+        framingToggle.setVisibility(View.GONE);
         guidancePanel.setVisibility(View.VISIBLE);
-        hintText.setText(pose.framing == PoseTemplate.Framing.UPPER_BODY
-                ? R.string.hint_step_back_upper : R.string.hint_step_back_full);
+        hintText.setText(stepBackHint(pose));
         for (TextView pill : partPills.values()) {
             pill.setVisibility(View.GONE);
         }
@@ -337,12 +419,15 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
     private void enterRecordMode() {
         mode = Mode.RECORD;
         target = null;
+        waistUp = framingToggle.getCheckedButtonId() == R.id.framingHalf;
         poseOverlay.setTarget(null);
         poseOverlay.setMatchState(null, false);
         modeLabel.setText(R.string.record_mode_label);
         shutterButton.setBackgroundResource(R.drawable.bg_shutter_record);
+        shutterButton.setContentDescription(getString(R.string.record_start));
         guidancePanel.setVisibility(View.GONE);
         matchChip.setVisibility(View.GONE);
+        framingToggle.setVisibility(View.VISIBLE);
         recorder.cancel();
         updateRecordingUi();
     }
@@ -361,21 +446,133 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
         });
     }
 
+    private int stepBackHint(PoseTemplate pose) {
+        return pose.framing == PoseTemplate.Framing.UPPER_BODY
+                ? R.string.hint_step_back_upper : R.string.hint_step_back_full;
+    }
+
+    // ---- Shutter & capture ---------------------------------------------------------------
+
     private void onShutter() {
-        if (mode != Mode.RECORD) {
-            Snackbar.make(findViewById(R.id.bottomBar), R.string.camera_capture_soon,
-                    Snackbar.LENGTH_SHORT).show();
+        if (mode == Mode.RECORD) {
+            PoseRecorder.State state = recorder.getState();
+            if (state == PoseRecorder.State.COUNTDOWN || state == PoseRecorder.State.HOLD_STILL) {
+                recorder.cancel();
+            } else {
+                recorder.start(SystemClock.uptimeMillis());
+                mainHandler.removeCallbacks(recordTicker);
+                mainHandler.post(recordTicker);
+            }
+            updateRecordingUi();
             return;
         }
-        PoseRecorder.State state = recorder.getState();
-        if (state == PoseRecorder.State.COUNTDOWN || state == PoseRecorder.State.HOLD_STILL) {
-            recorder.cancel();
-        } else {
-            recorder.start(SystemClock.uptimeMillis());
-            mainHandler.removeCallbacks(recordTicker);
-            mainHandler.post(recordTicker);
+        if (captureAtMs >= 0) {
+            cancelCaptureCountdown();
+            return;
         }
-        updateRecordingUi();
+        int seconds = settings.getCountdownSeconds();
+        if (seconds <= 0) {
+            takePhoto();
+        } else {
+            captureAtMs = SystemClock.uptimeMillis() + seconds * 1000L;
+            mainHandler.post(captureTicker);
+        }
+    }
+
+    private void cancelCaptureCountdown() {
+        captureAtMs = -1;
+        mainHandler.removeCallbacks(captureTicker);
+        if (mode != Mode.RECORD) {
+            countdownText.setVisibility(View.GONE);
+        }
+    }
+
+    private void takePhoto() {
+        ImageCapture capture = imageCapture;
+        if (capture == null || capturing) {
+            return;
+        }
+        if (PhotoStorage.needsWritePermission(this)) {
+            storagePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+            return;
+        }
+        capturing = true;
+        autoCapture.disarm();
+        PoseTemplate pose = mode == Mode.GUIDE ? target : null;
+        Float score = pose != null && smoother.isReliable() && smoother.getScore() >= 0
+                ? smoother.getScore() : null;
+        long now = System.currentTimeMillis();
+        shutterButton.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+        flash();
+
+        boolean mirror = frontCamera && settings.isMirrorSelfies();
+        capture.takePicture(PhotoStorage.outputOptions(this, now, mirror), ioExecutor,
+                new ImageCapture.OnImageSavedCallback() {
+                    @Override
+                    public void onImageSaved(@NonNull ImageCapture.OutputFileResults results) {
+                        if (results.getSavedUri() == null) {
+                            onError(new ImageCaptureException(ImageCapture.ERROR_FILE_IO,
+                                    "No URI returned", null));
+                            return;
+                        }
+                        long id = new PhotoRepository(CameraActivity.this).insert(
+                                results.getSavedUri(), pose != null ? pose.id : null,
+                                pose != null ? pose.name : null, score, now);
+                        mainHandler.post(() -> {
+                            capturing = false;
+                            refreshGalleryThumbnail();
+                            startActivity(new Intent(CameraActivity.this, PhotoActivity.class)
+                                    .putExtra(PhotoActivity.EXTRA_PHOTO_ID, id)
+                                    .putExtra(PhotoActivity.EXTRA_REVIEW, true));
+                        });
+                    }
+
+                    @Override
+                    public void onError(@NonNull ImageCaptureException e) {
+                        Log.e(TAG, "Photo capture failed", e);
+                        mainHandler.post(() -> {
+                            capturing = false;
+                            Snackbar.make(galleryButton,
+                                    getString(R.string.camera_capture_failed, e.getMessage()),
+                                    Snackbar.LENGTH_LONG).show();
+                        });
+                    }
+                });
+    }
+
+    private void flash() {
+        flashView.setVisibility(View.VISIBLE);
+        flashView.setAlpha(0.85f);
+        flashView.animate().alpha(0f).setDuration(300)
+                .withEndAction(() -> flashView.setVisibility(View.GONE)).start();
+    }
+
+    private void refreshGalleryThumbnail() {
+        int sizePx = Math.round(52 * getResources().getDisplayMetrics().density);
+        ioExecutor.execute(() -> {
+            Photo latest = new PhotoRepository(this).getLatest();
+            Bitmap bitmap = latest != null
+                    ? ImageLoader.get(this).decode(latest.uri, sizePx * 2) : null;
+            mainHandler.post(() -> {
+                if (isDestroyed()) {
+                    return;
+                }
+                if (bitmap != null) {
+                    galleryButton.setPadding(0, 0, 0, 0);
+                    galleryButton.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                    galleryButton.setImageTintList(null);
+                    galleryButton.setClipToOutline(true);
+                    galleryButton.setImageBitmap(bitmap);
+                } else {
+                    int pad = Math.round(14 * getResources().getDisplayMetrics().density);
+                    galleryButton.setPadding(pad, pad, pad, pad);
+                    galleryButton.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                    galleryButton.setImageTintList(ColorStateList.valueOf(
+                            ContextCompat.getColor(this, R.color.white)));
+                    galleryButton.setImageResource(R.drawable.ic_gallery);
+                }
+            });
+        });
     }
 
     // ---- Camera --------------------------------------------------------------------------
@@ -429,6 +626,11 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
         if (provider == null || isDestroyed()) {
             return;
         }
+        // The viewport is only known once the preview has been laid out.
+        if (previewView.getViewPort() == null) {
+            previewView.post(this::bindCameraUseCases);
+            return;
+        }
         CameraSelector selector = new CameraSelector.Builder().requireLensFacing(lensFacing).build();
         try {
             if (!provider.hasCamera(selector)) {
@@ -441,12 +643,12 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
             Log.w(TAG, "Could not query cameras", e);
         }
 
-        // Preview and analysis must share an aspect ratio for the overlay mapping to hold.
-        Preview preview = new Preview.Builder()
-                .setResolutionSelector(new ResolutionSelector.Builder()
-                        .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
-                        .build())
+        // All streams share a 4:3 aspect ratio so the overlay mapping holds and the saved
+        // photo shows the same framing as the 3:4 viewfinder.
+        ResolutionSelector fourByThree = new ResolutionSelector.Builder()
+                .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
                 .build();
+        Preview preview = new Preview.Builder().setResolutionSelector(fourByThree).build();
         preview.setSurfaceProvider(previewView.getSurfaceProvider());
 
         ImageAnalysis analysis = new ImageAnalysis.Builder()
@@ -460,13 +662,28 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
                 .build();
         analysis.setAnalyzer(analysisExecutor, this::analyzeFrame);
 
+        ImageCapture capture = new ImageCapture.Builder()
+                .setResolutionSelector(fourByThree)
+                .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                .build();
+
+        ViewPort viewPort = previewView.getViewPort();
+        UseCaseGroup group = new UseCaseGroup.Builder()
+                .setViewPort(viewPort)
+                .addUseCase(preview)
+                .addUseCase(analysis)
+                .addUseCase(capture)
+                .build();
+
         frontCamera = lensFacing == CameraSelector.LENS_FACING_FRONT;
         poseOverlay.setPoseFrame(null);
         try {
             provider.unbindAll();
-            provider.bindToLifecycle(this, selector, preview, analysis);
+            provider.bindToLifecycle(this, selector, group);
+            imageCapture = capture;
         } catch (RuntimeException e) {
             Log.e(TAG, "Use case binding failed", e);
+            imageCapture = null;
             showStatus(getString(R.string.camera_bind_failed, e.getMessage()));
             return;
         }
@@ -474,7 +691,8 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
         resolutionSummary = String.format(Locale.US, "%s  preview %s  analysis %s",
                 frontCamera ? "front" : "back",
                 describe(preview.getResolutionInfo()), describe(analysis.getResolutionInfo()));
-        Log.i(PERF_TAG, "Bound camera: " + resolutionSummary);
+        Log.i(PERF_TAG, "Bound camera: " + resolutionSummary + "  capture "
+                + describe(capture.getResolutionInfo()));
     }
 
     private static String describe(@Nullable ResolutionInfo info) {
@@ -500,7 +718,7 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
     @Override
     public void onPose(PoseFrame frame) {
         perfStats.record(frame.prepMs, frame.inferenceMs);
-        BodyPose live = frame.toBodyPose();
+        BodyPose live = frame.toBodyPose(waistUp);
         PoseTemplate currentTarget = target;
         // Matching is a few microseconds of arithmetic, so it runs here on MediaPipe's thread.
         MatchResult match = currentTarget != null && live != null
@@ -516,6 +734,9 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
 
     private void onFrameResult(PoseFrame frame, @Nullable BodyPose live,
                                @Nullable MatchResult match) {
+        if (isDestroyed()) {
+            return;
+        }
         poseOverlay.setPoseFrame(frame);
         switch (mode) {
             case GUIDE:
@@ -543,21 +764,23 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
         if (pose == null) {
             return;
         }
+        long now = SystemClock.uptimeMillis();
         if (match == null || !match.reliable) {
             if (match == null) {
                 smoother.reset();
                 poseOverlay.setMatchState(null, false);
             }
+            autoCapture.onScore(0f, false, now);
             matchChip.setVisibility(View.GONE);
-            hintText.setText(pose.framing == PoseTemplate.Framing.UPPER_BODY
-                    ? R.string.hint_step_back_upper : R.string.hint_step_back_full);
+            hintText.setVisibility(View.VISIBLE);
+            hintText.setText(stepBackHint(pose));
             for (TextView pill : partPills.values()) {
                 pill.setVisibility(View.GONE);
             }
             return;
         }
 
-        smoother.update(match, SystemClock.uptimeMillis());
+        smoother.update(match, now);
         float score = smoother.getScore();
         int percent = Math.round(score * 100f);
         matchChip.setText(getString(R.string.match_percent, percent));
@@ -568,8 +791,19 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
         matchChip.setBackgroundTintList(ColorStateList.valueOf(chipColor));
         matchChip.setTextColor(ContextCompat.getColor(this, R.color.black));
 
+        boolean holding = false;
+        if (autoCaptureEnabled && !capturing && captureAtMs < 0) {
+            if (autoCapture.onScore(score, true, now)) {
+                takePhoto();
+            }
+            holding = autoCapture.holdProgress(now) > 0f;
+        }
+
+        hintText.setVisibility(showHints || holding ? View.VISIBLE : View.GONE);
         MatchResult.Hint hint = smoother.getHint();
-        if (hint != null) {
+        if (holding) {
+            hintText.setText(R.string.hint_auto_capture_hold);
+        } else if (hint != null) {
             hintText.setText(GuidanceText.forHint(this, hint));
         } else if (score >= HOLD_IT_SCORE) {
             hintText.setText(R.string.hint_hold_it);
@@ -579,7 +813,7 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
         for (Map.Entry<BodyPart, TextView> entry : partPills.entrySet()) {
             MatchResult.Status s = status.get(entry.getKey());
             TextView pill = entry.getValue();
-            if (s == null || s == MatchResult.Status.IGNORED) {
+            if (!showHints || s == null || s == MatchResult.Status.IGNORED) {
                 pill.setVisibility(View.GONE);
                 continue;
             }
@@ -619,14 +853,17 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
             return;
         }
         long now = SystemClock.uptimeMillis();
+        boolean busy = false;
         switch (recorder.getState()) {
             case COUNTDOWN:
+                busy = true;
                 countdownText.setVisibility(View.VISIBLE);
                 countdownText.setText(String.valueOf(
                         Math.max(1, recorder.countdownSecondsLeft(now))));
                 statusText.setVisibility(View.GONE);
                 break;
             case HOLD_STILL:
+                busy = true;
                 countdownText.setVisibility(View.GONE);
                 showStatus(getString(R.string.record_hold_still) + "  "
                         + Math.round(recorder.stillProgress(now) * 100f) + "%");
@@ -650,19 +887,21 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
             default:
                 countdownText.setVisibility(View.GONE);
                 if (modelReady) {
-                    showStatus(getString(R.string.record_ready));
+                    showStatus(getString(waistUp ? R.string.record_ready_half
+                            : R.string.record_ready));
                 }
                 break;
+        }
+        // The framing can't change mid-capture.
+        framingToggle.setEnabled(!busy);
+        for (int i = 0; i < framingToggle.getChildCount(); i++) {
+            framingToggle.getChildAt(i).setEnabled(!busy);
         }
     }
 
     private void showSaveDialog(BodyPose pose) {
-        boolean fullBody = pose.visibility[Landmark.LEFT_KNEE] >= 0.6f
-                && pose.visibility[Landmark.RIGHT_KNEE] >= 0.6f
-                && pose.visibility[Landmark.LEFT_ANKLE] >= 0.6f
-                && pose.visibility[Landmark.RIGHT_ANKLE] >= 0.6f;
-        PoseTemplate.Framing framing = fullBody ? PoseTemplate.Framing.FULL_BODY
-                : PoseTemplate.Framing.UPPER_BODY;
+        PoseTemplate.Framing framing = waistUp ? PoseTemplate.Framing.UPPER_BODY
+                : PoseTemplate.Framing.FULL_BODY;
 
         View content = LayoutInflater.from(this).inflate(R.layout.dialog_save_pose, null);
         ((PoseThumbnailView) content.findViewById(R.id.savePreview)).setPose(pose);
@@ -680,6 +919,9 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
                 android.R.layout.simple_spinner_item, labels);
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         categorySpinner.setAdapter(adapter);
+        if (framing == PoseTemplate.Framing.UPPER_BODY) {
+            categorySpinner.setSelection(java.util.Arrays.asList(CATEGORY_KEYS).indexOf("portrait"));
+        }
 
         new MaterialAlertDialogBuilder(this)
                 .setTitle(R.string.record_save_title)
@@ -723,9 +965,9 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
 
     // ---- Misc UI -------------------------------------------------------------------------
 
-    private void toggleVisibility(View target, ImageButton toggle) {
-        boolean show = target.getVisibility() != View.VISIBLE;
-        target.setVisibility(show ? View.VISIBLE : View.GONE);
+    private void toggleVisibility(View view, ImageButton toggle) {
+        boolean show = view.getVisibility() != View.VISIBLE;
+        view.setVisibility(show ? View.VISIBLE : View.GONE);
         toggle.setImageTintList(ColorStateList.valueOf(ContextCompat.getColor(this,
                 show ? R.color.brand_accent : R.color.white)));
     }

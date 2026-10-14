@@ -18,6 +18,11 @@ public final class BodyPose {
 
     /** Shoulders and hips must be at least this visible to define the body frame. */
     public static final float MIN_FRAME_VISIBILITY = 0.5f;
+    /**
+     * For waist-up framing the hips sit at or below the image edge. MediaPipe still estimates
+     * where they are, with low visibility, and that estimate is good enough to anchor the frame.
+     */
+    public static final float MIN_HIDDEN_HIP_VISIBILITY = 0.02f;
 
     public final float[] x;
     public final float[] y;
@@ -41,12 +46,19 @@ public final class BodyPose {
      */
     public static BodyPose fromImageLandmarks(float[] nx, float[] ny, float[] nz, float[] vis,
                                               int imageWidth, int imageHeight) {
+        return fromImageLandmarks(nx, ny, nz, vis, imageWidth, imageHeight, MIN_FRAME_VISIBILITY);
+    }
+
+    /** As above, with a separate (usually lower) visibility bar for the hips. */
+    public static BodyPose fromImageLandmarks(float[] nx, float[] ny, float[] nz, float[] vis,
+                                              int imageWidth, int imageHeight,
+                                              float minHipVisibility) {
         int ls = Landmark.LEFT_SHOULDER;
         int rs = Landmark.RIGHT_SHOULDER;
         int lh = Landmark.LEFT_HIP;
         int rh = Landmark.RIGHT_HIP;
         if (vis[ls] < MIN_FRAME_VISIBILITY || vis[rs] < MIN_FRAME_VISIBILITY
-                || vis[lh] < MIN_FRAME_VISIBILITY || vis[rh] < MIN_FRAME_VISIBILITY) {
+                || vis[lh] < minHipVisibility || vis[rh] < minHipVisibility) {
             return null;
         }
         float hipX = (nx[lh] + nx[rh]) / 2f * imageWidth;

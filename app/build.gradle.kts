@@ -55,6 +55,7 @@ dependencies {
     implementation(libs.camera.view)
     implementation(libs.mediapipe.tasks.vision)
     implementation(libs.recyclerview)
+    implementation(libs.exifinterface)
     testImplementation(libs.junit)
     // Android's built-in org.json is stubbed out in local unit tests.
     testImplementation(libs.org.json)

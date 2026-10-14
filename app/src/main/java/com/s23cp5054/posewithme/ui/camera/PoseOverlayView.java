@@ -67,6 +67,7 @@ public class PoseOverlayView extends View {
     private boolean useMirroredTarget;
     @Nullable private Map<BodyPart, MatchResult.Status> partStatus;
     private boolean showSkeleton = true;
+    private boolean showGhost = true;
 
     private boolean anchorValid;
     private float anchorX;
@@ -123,6 +124,11 @@ public class PoseOverlayView extends View {
         this.useMirroredTarget = useMirroredTarget;
     }
 
+    public void setShowGhost(boolean show) {
+        showGhost = show;
+        invalidate();
+    }
+
     public void setShowSkeleton(boolean show) {
         showSkeleton = show;
         invalidate();
@@ -136,7 +142,7 @@ public class PoseOverlayView extends View {
         if (hasPerson) {
             transform.update(f.imageWidth, f.imageHeight, getWidth(), getHeight(), f.mirrored);
         }
-        if (target != null) {
+        if (target != null && showGhost) {
             drawGhost(canvas, hasPerson ? f : null);
         }
         if (hasPerson && showSkeleton) {
@@ -149,8 +155,11 @@ public class PoseOverlayView extends View {
         float y;
         float scale;
         boolean mirror;
-        if (f != null && f.visibility[Landmark.LEFT_HIP] >= MIN_VISIBILITY
-                && f.visibility[Landmark.RIGHT_HIP] >= MIN_VISIBILITY
+        // Waist-up poses anchor on MediaPipe's estimate of hips just below the frame.
+        float minHip = target.framing == PoseTemplate.Framing.UPPER_BODY
+                ? BodyPose.MIN_HIDDEN_HIP_VISIBILITY : MIN_VISIBILITY;
+        if (f != null && f.visibility[Landmark.LEFT_HIP] >= minHip
+                && f.visibility[Landmark.RIGHT_HIP] >= minHip
                 && f.visibility[Landmark.LEFT_SHOULDER] >= MIN_VISIBILITY
                 && f.visibility[Landmark.RIGHT_SHOULDER] >= MIN_VISIBILITY) {
             float hipX = (transform.mapX(f.x[Landmark.LEFT_HIP])

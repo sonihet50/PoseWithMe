@@ -92,6 +92,15 @@ public final class PoseRepository {
         cache = null;
     }
 
+    /** Deletes a pose the user recorded. Built-in poses can't be deleted. */
+    @WorkerThread
+    public boolean deleteUserPose(String id) {
+        File file = new File(new File(appContext.getFilesDir(), USER_DIR), id + ".json");
+        boolean deleted = file.delete();
+        cache = null;
+        return deleted;
+    }
+
     private List<PoseTemplate> loadBuiltInPoses() {
         List<PoseTemplate> poses = new ArrayList<>();
         AssetManager assets = appContext.getAssets();

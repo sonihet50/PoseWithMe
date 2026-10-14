@@ -10,7 +10,8 @@
     <string name="home_hero_subtitle">A live skeleton guide that runs entirely on your phone.</string>
     <string name="home_section_explore">Explore</string>
     <string name="home_recommended_title">Recommended for you</string>
-    <string name="home_recommended_subtitle">Pose ideas picked for where you are</string>
+    <string name="home_recommended_subtitle">Based on your favourites and styles</string>
+    <string name="home_recommended_for">Picked for: %1$s</string>
     <string name="home_browse_title">Browse poses</string>
     <string name="home_browse_subtitle">Standing, sitting, scenic &amp; more</string>
     <string name="home_nearby_title">Nearby spots</string>
@@ -111,6 +112,86 @@
     <string name="record_try_it">Try it</string>
     <string name="record_save_failed">Could not save the pose: %1$s</string>
 
+    <string name="framing_half_body">Half body</string>
+    <string name="record_start">Start recording</string>
+    <string name="record_ready_half">Waist-up: tap the button, then get into position</string>
+    <string name="hint_auto_capture_hold">Hold it… taking the photo</string>
+    <string name="camera_capture_failed">Couldn’t take the photo: %1$s</string>
+    <string name="camera_storage_denied">Storage permission is needed to save photos on this Android version.</string>
+
+    <!-- Photos & gallery -->
+    <string name="photo_content_description">Photo taken with PoseWithMe</string>
+    <string name="photo_share">Share</string>
+    <string name="photo_retake">Retake</string>
+    <string name="photo_keep">Keep</string>
+    <string name="photo_delete">Delete</string>
+    <string name="photo_delete_title">Delete this photo?</string>
+    <string name="photo_delete_message">It will be removed from your phone’s gallery too.</string>
+    <string name="photo_free_pose">Free pose</string>
+    <string name="percent_short">%1$d%%</string>
+    <string name="gallery_empty">No photos yet. Pick a pose and take your first shot!</string>
+    <plurals name="gallery_count">
+        <item quantity="one">%d photo</item>
+        <item quantity="other">%d photos</item>
+    </plurals>
+
+    <!-- Favorites & library -->
+    <string name="favorite_add">Add to favorites</string>
+    <string name="favorite_remove">Remove from favorites</string>
+    <string name="favorites_empty">No favorites yet. Tap the heart on any pose to save it here.</string>
+    <string name="pose_delete">Delete pose</string>
+    <string name="pose_delete_title">Delete “%1$s”?</string>
+    <string name="pose_delete_message">This removes your recorded pose from the library.</string>
+    <string name="home_record_title">Record your own pose</string>
+    <string name="home_record_subtitle">Good at posing? Save it and reuse it anytime</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_section_capture">Capture</string>
+    <string name="settings_auto_capture">Auto-capture</string>
+    <string name="settings_auto_capture_summary">Take the photo by itself once you hold the pose</string>
+    <string name="settings_threshold">Match needed for auto-capture: %1$d%%</string>
+    <string name="settings_countdown">Self-timer</string>
+    <string name="settings_countdown_off">Off</string>
+    <string name="settings_countdown_seconds">%1$ds</string>
+    <string name="settings_mirror">Mirror front-camera photos</string>
+    <string name="settings_mirror_summary">Save selfies the way the preview shows them</string>
+    <string name="settings_section_guidance">Guidance</string>
+    <string name="settings_hints">Correction hints</string>
+    <string name="settings_hints_summary">Tips like “Raise your left arm” and body-part status</string>
+    <string name="settings_ghost">Pose ghost</string>
+    <string name="settings_ghost_summary">Show the target pose over your body</string>
+    <string name="settings_skeleton">My skeleton</string>
+    <string name="settings_skeleton_summary">Draw the detected body points</string>
+    <string name="settings_section_recommendations">Recommendations</string>
+    <string name="settings_preferred_categories">Pose styles you like</string>
+    <string name="settings_section_about">About</string>
+    <string name="settings_about_body">PoseWithMe %1$s\n\nPose detection runs entirely on your phone with Google MediaPipe Pose Landmarker (Apache 2.0). Camera frames never leave the device.\n\nBuilt-in poses were traced from openly licensed photos; each pose credits its photographer. Only body coordinates are stored, not the photos.\n\nPlace data © OpenStreetMap contributors (ODbL), looked up only when you open nearby suggestions.</string>
+
+    <!-- Recommendations -->
+    <string name="nearby_title">Poses for this spot</string>
+    <string name="nearby_locating">Finding where you are…</string>
+    <string name="nearby_looking_up">Looking up places nearby…</string>
+    <string name="nearby_found">You’re near %1$s</string>
+    <string name="nearby_scene_detected">Detected: %1$s</string>
+    <string name="nearby_no_place">No landmark found nearby. Pick your surroundings below.</string>
+    <string name="nearby_permission_denied">Location is off. Pick your surroundings below.</string>
+    <string name="nearby_offline">Couldn’t reach the places service. Pick your surroundings below.</string>
+    <string name="nearby_no_location">Couldn’t get your location. Pick your surroundings below.</string>
+    <string name="nearby_pick_scene">Where are you?</string>
+    <string name="nearby_curated_title">Suggested for %1$s</string>
+    <string name="nearby_curated_note">Hand-picked by PoseWithMe for this landmark</string>
+    <string name="nearby_recommended_title">Recommended poses</string>
+    <string name="nearby_recommended_for_scene">Recommended for %1$s</string>
+    <string name="nearby_use_location">Use my location</string>
+    <string name="scene_street">Street</string>
+    <string name="scene_park">Park</string>
+    <string name="scene_beach">Beach</string>
+    <string name="scene_monument">Monument</string>
+    <string name="scene_cafe">Café</string>
+    <string name="scene_scenic">Scenic view</string>
+    <string name="scene_indoor">Indoors</string>
+
     <string name="camera_close">Close camera</string>
     <string name="camera_grid">Toggle grid</string>
     <string name="camera_stats">Toggle performance stats</string>
@@ -118,7 +199,6 @@
     <string name="camera_shutter">Take photo</string>
     <string name="camera_gallery">Open photos</string>
     <string name="camera_mode_pose">POSE</string>
-    <string name="camera_capture_soon">Photo capture is coming in the next build.</string>
     <string name="camera_loading_model">Loading pose model…</string>
     <string name="camera_no_person">Step back so your body is in view</string>
     <string name="camera_permission_denied">Camera permission is needed to detect your pose. Grant it in Settings and reopen this screen.</string>
