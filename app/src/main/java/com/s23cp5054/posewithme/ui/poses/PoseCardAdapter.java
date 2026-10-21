@@ -54,7 +54,7 @@ public final class PoseCardAdapter extends RecyclerView.Adapter<PoseCardAdapter.
     @Override
     public void onBindViewHolder(@NonNull Holder holder, int position) {
         PoseTemplate pose = poses.get(position);
-        holder.thumbnail.setPose(pose.pose);
+        holder.thumbnail.setPeople(pose.people);
         holder.name.setText(pose.name);
         holder.meta.setText(PoseLabels.shortMeta(holder.itemView.getContext(), pose));
         holder.badge.setVisibility("user".equals(pose.source.type) ? View.VISIBLE : View.GONE);

@@ -13,12 +13,13 @@ SharedPreferences. There is no backend.
 
 | Area | What it does |
 |---|---|
-| Live camera | CameraX preview in a 3:4 viewfinder, front and back cameras, rule-of-thirds grid, performance overlay |
+| Live camera | CameraX preview in a 3:4 viewfinder, front and back cameras, rear flashlight, tap-to-focus, rule-of-thirds grid, performance overlay |
 | Pose detection | MediaPipe Pose Landmarker Lite, on-device, live-stream mode, 33 body landmarks |
 | Guidance | Target-pose ghost anchored to your hips and scaled to your torso; live match %; per-body-part status (head, torso, arms, legs); one smoothed correction hint |
-| Pose library | 12 built-in poses (full body and waist-up) shown as mannequin silhouettes, with steps and photo credits |
+| Pose library | 19 built-in poses, including 7 couple/friends/group arrangements for 2–6 people, with silhouettes, instructions and source credits; Solo/Couple/Friends/Group filters |
+| Import an image | Choose a photo using the system picker, extract 1–6 people on-device, review the silhouettes and framing, name/category it, and save only the landmarks |
 | Record a pose | Countdown, then "hold still" detection; the held frames are averaged into a reusable pose (full body or half body) |
-| Photo capture | Manual shutter, self-timer (off/3/5/10 s), optional auto-capture when the pose is held (fires once per pose), review with Retake/Share/Keep |
+| Photo capture | Highest supported 4:3 still resolution, quality-priority capture, JPEG quality 100, hardware-supported high-quality noise reduction and edge processing; manual shutter, self-timer, auto-capture, Retake/Share/Keep |
 | Gallery | Photos saved to `Pictures/PoseWithMe`; metadata in SQLite (pose, score, time); view, share, delete |
 | Favorites | Heart any pose; stored in SQLite |
 | Recommendations | Location, then a hand-picked landmark (offline) or an OpenStreetMap lookup, then a scene (beach, monument, park, café, scenic…), then ranked poses; manual scene picker as a fallback |
@@ -32,7 +33,7 @@ com.s23cp5054.posewithme
 ├── camera/                      PreviewTransform (view mapping), FrameConverter (RGBA → upright bitmap)
 ├── pose/
 │   ├── detection/               PoseDetector (MediaPipe wrapper), PoseFrame
-│   ├── model/                   Landmark, BodyPose (body-relative frame), PoseTemplate (+ JSON)
+│   ├── model/                   Landmark, BodyPose, PoseGroup (shared group frame), PoseTemplate (+ JSON)
 │   ├── matching/                PoseMatcher, MatchConfig, MatchResult, GuidanceSmoother, AutoCaptureTrigger
 │   ├── recording/               PoseRecorder (countdown → hold still → average)
 │   └── recommendation/          Scene, SceneMapper, CuratedPlace, PoseRecommender, GeoUtils
@@ -46,7 +47,7 @@ com.s23cp5054.posewithme
 ├── ui/
 │   ├── camera/                  CameraActivity, PoseOverlayView, CompositionGridView, GuidanceText
 │   ├── pose/                    SilhouetteRenderer, PoseThumbnailView
-│   ├── poses/                   PoseLibraryActivity, PoseDetailSheet, PoseCardAdapter, PoseLabels
+│   ├── poses/                   PoseLibraryActivity, ImportPoseActivity, PoseDetailSheet, PoseCardAdapter, PoseLabels
 │   ├── gallery/                 GalleryActivity, PhotoActivity
 │   ├── nearby/                  NearbyActivity
 │   └── settings/                SettingsActivity
@@ -84,13 +85,28 @@ distance. Then:
 
 All thresholds and weights live in `MatchConfig`.
 
+Group templates preserve relative hip positions and body sizes in a common frame (mean hip
+centre, mean torso length). Each person's pose is scored independently; the group score uses
+the lowest person's score and a formation-spacing score. All members must have usable frames
+before guidance or auto-capture can succeed. Roles follow horizontal position in the unmirrored
+camera image and are numbered on the overlay. Crossing or heavily overlapping people and
+multiple rows are less reliable; this is positional matching, not identity recognition.
+Selfie previews mirror the entire formation consistently. Recording remains single-person;
+group templates can be imported from photos.
+
 ## Pose library and data sources
 
-Built-in poses in `app/src/main/assets/poses/` came from openly licensed photos
+The 12 original single-person poses in `app/src/main/assets/poses/` came from openly licensed photos
 (CC0, Public Domain Mark, CC BY 2.0) found through Openverse. They went through
 MediaPipe, automatic quality filters and manual review. Only body coordinates and
 attribution are stored, never the photos, and each pose credits its
 photographer. The offline tooling is in [`tools/pose_pipeline/`](tools/pose_pipeline/README.md).
+
+The group library adds six original hand-authored arrangements (labelled “designed” in the
+credits) and one photo-derived two-person portrait with its own source credit. They are not
+visitor-popularity data or extractions from synthetic reference photos. Regenerate the designed
+arrangements with `tools/pose_pipeline/create_group_poses.py`; the scraper also supports real
+multi-person photos and filters duplicate detections before curation.
 
 `assets/places.json` lists landmarks with **hand-picked** poses. The app labels
 these as suggestions, not as "popular": it has no visitor statistics. The only
@@ -102,6 +118,8 @@ Overpass API, and are looked up only when the Nearby screen is open.
 ## Privacy
 
 - Camera frames are processed on the device and are never uploaded.
+- Image imports are processed on-device. The selected photo is not copied into the pose library;
+  only landmarks and the name/category chosen by the user are stored.
 - Location is used only on the Nearby screen. Only the coordinates are sent to
   the Overpass API to find the nearest place, and nothing else leaves the phone.
 - Photos go to the phone's own gallery. The database holds only metadata.
@@ -113,12 +131,18 @@ Android SDK 36.
 
 ```
 gradlew assembleDebug          # debug APK
-gradlew testDebugUnitTest      # 42 JVM unit tests (matcher, recorder, auto-capture, recommendations…)
+gradlew testDebugUnitTest      # JVM tests for matching, groups, recording, capture and recommendations
+gradlew assembleDebugAndroidTest  # build the on-phone test APK
 gradlew assembleRelease        # R8-shrunk release APK, signed with the debug key for testing only
 ```
 
 The app ships native code for `arm64-v8a` only, so it runs on physical ARM
 phones, not on x86 emulators.
+
+For a personal phone, preserve app data: install the app and test APK with `adb install -r`,
+then run `adb shell am instrument -w com.s23cp5054.posewithme.test/androidx.test.runner.AndroidJUnitRunner`.
+Avoid Gradle's `connectedDebugAndroidTest` on an installation with data you want to retain;
+its device-test cleanup can uninstall the app. Back up private app data before device testing.
 
 ## Measurements
 
@@ -143,6 +167,11 @@ logcat by `PoseWithMe.Perf`, to repeat these measurements.
   clothing) score less reliably.
 - Seated poses depend on MediaPipe's leg estimates, which are noisier than
   standing ones.
+- Multi-person detection is capped at six distinct people and needs separation and visible
+  shoulders/hips. Large groups increase inference time. Imported silhouettes must be reviewed
+  because an occluded person can be missed by the model.
+- High-quality camera processing depends on the hardware; it does not reproduce every
+  proprietary HDR/night-mode feature of the phone's stock camera. Tap a subject to focus.
 - Sharing recorded poses between users is not built yet. A pose is a 2 KB JSON
   file, so file or QR-code sharing would be a natural next step without needing
   a server.

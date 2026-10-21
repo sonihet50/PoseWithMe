@@ -17,7 +17,7 @@ import java.util.List;
  */
 public final class PoseTemplate {
 
-    public static final int FORMAT_VERSION = 1;
+    public static final int FORMAT_VERSION = 2;
 
     public enum Framing { FULL_BODY, UPPER_BODY }
 
@@ -35,6 +35,8 @@ public final class PoseTemplate {
     public final List<String> ignoredParts;
     public final Source source;
     public final BodyPose pose;
+    /** Group members share one coordinate frame, preserving their relative spacing. */
+    public final List<BodyPose> people;
 
     public static final class Source {
         /** "web", "recorded" (by the team, bundled) or "user" (recorded on this phone). */
@@ -61,6 +63,18 @@ public final class PoseTemplate {
                         String difficulty, Framing framing, boolean mirrorAllowed,
                         List<String> instructions, List<String> scenes,
                         List<String> ignoredParts, Source source, BodyPose pose) {
+        this(id, name, description, category, difficulty, framing, mirrorAllowed, instructions,
+                scenes, ignoredParts, source, Collections.singletonList(pose));
+    }
+
+    public PoseTemplate(String id, String name, String description, String category,
+                        String difficulty, Framing framing, boolean mirrorAllowed,
+                        List<String> instructions, List<String> scenes,
+                        List<String> ignoredParts, Source source, List<BodyPose> people) {
+        if (!id.matches("[A-Za-z0-9_-]+") || people.isEmpty()
+                || people.size() > PoseGroup.MAX_PEOPLE) {
+            throw new IllegalArgumentException("Invalid pose id or number of people");
+        }
         this.id = id;
         this.name = name;
         this.description = description;
@@ -72,16 +86,51 @@ public final class PoseTemplate {
         this.scenes = Collections.unmodifiableList(new ArrayList<>(scenes));
         this.ignoredParts = Collections.unmodifiableList(new ArrayList<>(ignoredParts));
         this.source = source;
-        this.pose = pose;
+        this.people = Collections.unmodifiableList(PoseGroup.normalize(people));
+        this.pose = this.people.get(0);
     }
 
     public static PoseTemplate fromJson(String json) throws JSONException {
         JSONObject o = new JSONObject(json);
         int version = o.optInt("formatVersion", 1);
-        if (version > FORMAT_VERSION) {
+        if (version < 1 || version > FORMAT_VERSION) {
             throw new JSONException("Unsupported pose format version " + version);
         }
-        JSONArray landmarks = o.getJSONArray("landmarks");
+        List<BodyPose> people = new ArrayList<>();
+        if (version == 1) {
+            people.add(readPose(o.getJSONArray("landmarks")));
+        } else {
+            JSONArray members = o.getJSONArray("people");
+            if (members.length() < 1 || members.length() > PoseGroup.MAX_PEOPLE) {
+                throw new JSONException("Expected 1 to " + PoseGroup.MAX_PEOPLE + " people");
+            }
+            for (int i = 0; i < members.length(); i++) {
+                people.add(readPose(members.getJSONArray(i)));
+            }
+        }
+
+        JSONObject s = o.optJSONObject("source");
+        Source source = s == null
+                ? new Source("unknown", null, null, null, null, null)
+                : new Source(s.optString("type", "unknown"), optString(s, "title"),
+                optString(s, "author"), optString(s, "url"), optString(s, "license"),
+                optString(s, "licenseUrl"));
+
+        try {
+            return new PoseTemplate(o.getString("id"), o.getString("name"),
+                    o.optString("description", ""), o.optString("category", "casual_standing"),
+                    o.optString("difficulty", "easy"),
+                    "upper_body".equals(o.optString("framing")) ? Framing.UPPER_BODY
+                            : Framing.FULL_BODY,
+                    o.optBoolean("mirrorAllowed", true), stringList(o.optJSONArray("instructions")),
+                    stringList(o.optJSONArray("scenes")), stringList(o.optJSONArray("ignoredParts")),
+                    source, people);
+        } catch (IllegalArgumentException e) {
+            throw new JSONException(e.getMessage());
+        }
+    }
+
+    private static BodyPose readPose(JSONArray landmarks) throws JSONException {
         if (landmarks.length() != Landmark.COUNT) {
             throw new JSONException("Expected " + Landmark.COUNT + " landmarks");
         }
@@ -95,34 +144,17 @@ public final class PoseTemplate {
             y[i] = (float) p.getDouble(1);
             z[i] = (float) p.getDouble(2);
             v[i] = (float) p.getDouble(3);
+            if (!Float.isFinite(x[i]) || !Float.isFinite(y[i]) || !Float.isFinite(z[i])
+                    || !Float.isFinite(v[i]) || v[i] < 0f || v[i] > 1f) {
+                throw new JSONException("Invalid landmark coordinate or visibility");
+            }
         }
-
-        JSONObject s = o.optJSONObject("source");
-        Source source = s == null
-                ? new Source("unknown", null, null, null, null, null)
-                : new Source(s.optString("type", "unknown"), optString(s, "title"),
-                optString(s, "author"), optString(s, "url"), optString(s, "license"),
-                optString(s, "licenseUrl"));
-
-        return new PoseTemplate(
-                o.getString("id"),
-                o.getString("name"),
-                o.optString("description", ""),
-                o.optString("category", "casual_standing"),
-                o.optString("difficulty", "easy"),
-                "upper_body".equals(o.optString("framing")) ? Framing.UPPER_BODY
-                        : Framing.FULL_BODY,
-                o.optBoolean("mirrorAllowed", true),
-                stringList(o.optJSONArray("instructions")),
-                stringList(o.optJSONArray("scenes")),
-                stringList(o.optJSONArray("ignoredParts")),
-                source,
-                new BodyPose(x, y, z, v));
+        return new BodyPose(x, y, z, v);
     }
 
     public String toJson() throws JSONException {
         JSONObject o = new JSONObject();
-        o.put("formatVersion", FORMAT_VERSION);
+        o.put("formatVersion", people.size() == 1 ? 1 : FORMAT_VERSION);
         o.put("id", id);
         o.put("name", name);
         o.put("description", description);
@@ -143,6 +175,19 @@ public final class PoseTemplate {
         s.putOpt("licenseUrl", source.licenseUrl);
         o.put("source", s);
 
+        if (people.size() == 1) {
+            o.put("landmarks", writePose(pose));
+        } else {
+            JSONArray members = new JSONArray();
+            for (BodyPose person : people) {
+                members.put(writePose(person));
+            }
+            o.put("people", members);
+        }
+        return o.toString(2);
+    }
+
+    private static JSONArray writePose(BodyPose pose) throws JSONException {
         JSONArray landmarks = new JSONArray();
         for (int i = 0; i < Landmark.COUNT; i++) {
             JSONArray p = new JSONArray();
@@ -152,8 +197,7 @@ public final class PoseTemplate {
             p.put(round(pose.visibility[i]));
             landmarks.put(p);
         }
-        o.put("landmarks", landmarks);
-        return o.toString(2);
+        return landmarks;
     }
 
     private static double round(float value) {

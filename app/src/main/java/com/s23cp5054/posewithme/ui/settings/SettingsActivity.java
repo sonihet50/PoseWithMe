@@ -28,7 +28,7 @@ public class SettingsActivity extends AppCompatActivity {
 
     private static final String[] CATEGORY_KEYS = {
             "casual_standing", "crossed_arms", "walking", "sitting", "portrait", "beach",
-            "monument", "scenic", "cafe",
+            "monument", "scenic", "cafe", "couple", "friends", "group",
     };
 
     private AppSettings settings;

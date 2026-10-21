@@ -97,6 +97,6 @@ public final class GuidanceSmoother {
         if (a == null || b == null) {
             return a == b;
         }
-        return a.part == b.part && a.action == b.action;
+        return a.part == b.part && a.action == b.action && a.personIndex == b.personIndex;
     }
 }

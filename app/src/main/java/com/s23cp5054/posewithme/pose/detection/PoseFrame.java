@@ -5,7 +5,12 @@ import androidx.annotation.Nullable;
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark;
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult;
 import com.s23cp5054.posewithme.pose.model.BodyPose;
+import com.s23cp5054.posewithme.pose.model.PoseGroup;
+import com.s23cp5054.posewithme.pose.model.Landmark;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -19,6 +24,8 @@ public final class PoseFrame {
     public static final int LANDMARK_COUNT = 33;
 
     public final boolean hasPose;
+    /** Pixel coordinates in the upright image, ordered left-to-right. */
+    public final List<BodyPose> imagePoses;
     public final float[] x = new float[LANDMARK_COUNT];
     public final float[] y = new float[LANDMARK_COUNT];
     /** MediaPipe's relative depth, scaled like x; smaller is closer to the camera. */
@@ -33,7 +40,7 @@ public final class PoseFrame {
     /** Time from handing the frame to MediaPipe until its result arrived. */
     public final long inferenceMs;
 
-    PoseFrame(PoseLandmarkerResult result, int imageWidth, int imageHeight, boolean mirrored,
+    public PoseFrame(PoseLandmarkerResult result, int imageWidth, int imageHeight, boolean mirrored,
               long prepMs, long inferenceMs) {
         this.imageWidth = imageWidth;
         this.imageHeight = imageHeight;
@@ -42,15 +49,35 @@ public final class PoseFrame {
         this.inferenceMs = inferenceMs;
 
         List<List<NormalizedLandmark>> poses = result.landmarks();
-        hasPose = !poses.isEmpty() && poses.get(0).size() >= LANDMARK_COUNT;
-        if (hasPose) {
-            List<NormalizedLandmark> landmarks = poses.get(0);
+        List<BodyPose> people = new ArrayList<>();
+        for (List<NormalizedLandmark> landmarks : poses) {
+            if (landmarks.size() != LANDMARK_COUNT) continue;
+            float[] px = new float[LANDMARK_COUNT];
+            float[] py = new float[LANDMARK_COUNT];
+            float[] pz = new float[LANDMARK_COUNT];
+            float[] pv = new float[LANDMARK_COUNT];
             for (int i = 0; i < LANDMARK_COUNT; i++) {
                 NormalizedLandmark landmark = landmarks.get(i);
-                x[i] = landmark.x();
-                y[i] = landmark.y();
-                z[i] = landmark.z();
-                visibility[i] = landmark.visibility().orElse(1f);
+                px[i] = landmark.x() * imageWidth;
+                py[i] = landmark.y() * imageHeight;
+                pz[i] = landmark.z() * imageWidth;
+                pv[i] = landmark.visibility().orElse(1f);
+            }
+            BodyPose detected = new BodyPose(px, py, pz, pv);
+            boolean duplicate = false;
+            for (BodyPose person : people) duplicate |= PoseGroup.samePerson(person, detected);
+            if (!duplicate) people.add(detected);
+        }
+        people.sort(Comparator.comparingDouble(PoseGroup::hipX));
+        imagePoses = Collections.unmodifiableList(people);
+        hasPose = !people.isEmpty();
+        if (hasPose) {
+            BodyPose first = people.get(0);
+            for (int i = 0; i < LANDMARK_COUNT; i++) {
+                x[i] = first.x[i] / imageWidth;
+                y[i] = first.y[i] / imageHeight;
+                z[i] = first.z[i] / imageWidth;
+                visibility[i] = first.visibility[i];
             }
         }
     }
@@ -66,5 +93,19 @@ public final class PoseFrame {
         }
         return BodyPose.fromImageLandmarks(x, y, z, visibility, imageWidth, imageHeight,
                 waistUp ? BodyPose.MIN_HIDDEN_HIP_VISIBILITY : BodyPose.MIN_FRAME_VISIBILITY);
+    }
+
+    /** Empty if any person lacks a usable body frame; never silently drops a group member. */
+    public List<BodyPose> toBodyPoses(boolean waistUp) {
+        if (imagePoses.isEmpty() || imagePoses.size() > PoseGroup.MAX_PEOPLE) return Collections.emptyList();
+        for (BodyPose person : imagePoses) {
+            float minHip = waistUp ? BodyPose.MIN_HIDDEN_HIP_VISIBILITY : BodyPose.MIN_FRAME_VISIBILITY;
+            if (person.visibility[Landmark.LEFT_SHOULDER] < BodyPose.MIN_FRAME_VISIBILITY
+                    || person.visibility[Landmark.RIGHT_SHOULDER] < BodyPose.MIN_FRAME_VISIBILITY
+                    || person.visibility[Landmark.LEFT_HIP] < minHip
+                    || person.visibility[Landmark.RIGHT_HIP] < minHip
+                    || PoseGroup.torso(person) < 1f) return Collections.emptyList();
+        }
+        return PoseGroup.normalize(imagePoses);
     }
 }

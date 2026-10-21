@@ -15,6 +15,9 @@ final class GuidanceText {
     private static final float SLIGHT_DEGREES = 25f;
 
     static String forHint(Context context, MatchResult.Hint hint) {
+        if (hint.action == MatchResult.Hint.Action.MATCH_SPACING) {
+            return context.getString(R.string.hint_group_spacing);
+        }
         String side = context.getString(
                 hint.part == BodyPart.LEFT_ARM || hint.part == BodyPart.LEFT_LEG
                         ? R.string.side_left : R.string.side_right);
@@ -22,7 +25,8 @@ final class GuidanceText {
         if (hint.degrees < SLIGHT_DEGREES) {
             text = context.getString(R.string.hint_slightly, text);
         }
-        return text;
+        return hint.personIndex >= 0
+                ? context.getString(R.string.hint_person, hint.personIndex + 1, text) : text;
     }
 
     static String partLabel(Context context, BodyPart part) {

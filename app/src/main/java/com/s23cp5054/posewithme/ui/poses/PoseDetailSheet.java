@@ -37,7 +37,7 @@ public final class PoseDetailSheet {
         BottomSheetDialog sheet = new BottomSheetDialog(activity);
         View content = LayoutInflater.from(activity).inflate(R.layout.sheet_pose_detail, null);
 
-        ((PoseThumbnailView) content.findViewById(R.id.detailThumbnail)).setPose(pose.pose);
+        ((PoseThumbnailView) content.findViewById(R.id.detailThumbnail)).setPeople(pose.people);
         ((TextView) content.findViewById(R.id.detailName)).setText(pose.name);
         ((TextView) content.findViewById(R.id.detailMeta)).setText(
                 PoseLabels.longMeta(activity, pose));
@@ -111,6 +111,9 @@ public final class PoseDetailSheet {
 
     private static CharSequence attributionFor(Activity activity, PoseTemplate pose) {
         PoseTemplate.Source s = pose.source;
+        if ("designed".equals(s.type)) {
+            return activity.getString(R.string.attribution_designed);
+        }
         if ("web".equals(s.type)) {
             String titleText = Html.escapeHtml(s.title != null ? s.title : "photo");
             String title = s.url != null

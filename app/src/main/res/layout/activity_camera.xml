@@ -51,6 +51,16 @@
             app:layout_constraintEnd_toStartOf="@id/statsButton"
             app:layout_constraintTop_toTopOf="parent"
             app:tint="@color/white" />
+        <ImageButton
+            android:id="@+id/torchButton"
+            android:layout_width="48dp"
+            android:layout_height="56dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/camera_torch_on"
+            android:src="@drawable/ic_flash"
+            app:layout_constraintEnd_toStartOf="@id/gridButton"
+            app:layout_constraintTop_toTopOf="parent"
+            app:tint="@color/white" />
     </androidx.constraintlayout.widget.ConstraintLayout>
 
     <!-- 3:4 viewfinder, matching the camera stream so nothing is cropped away. -->

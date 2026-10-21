@@ -14,6 +14,7 @@ import com.google.mediapipe.tasks.vision.core.RunningMode;
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker;
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult;
 import com.s23cp5054.posewithme.camera.FrameConverter;
+import com.s23cp5054.posewithme.pose.model.PoseGroup;
 
 import java.io.Closeable;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -60,6 +61,18 @@ public final class PoseDetector implements Closeable {
         return new PoseDetector(context.getApplicationContext(), listener);
     }
 
+    /** Still-image import. Run off the UI thread with an upright, software ARGB bitmap. */
+    public static PoseFrame detectImage(Context context, Bitmap bitmap) {
+        PoseLandmarker.PoseLandmarkerOptions options = PoseLandmarker.PoseLandmarkerOptions.builder()
+                .setBaseOptions(BaseOptions.builder().setModelAssetPath(MODEL_ASSET).build())
+                .setRunningMode(RunningMode.IMAGE).setNumPoses(PoseGroup.MAX_PEOPLE + 1)
+                .setMinPoseDetectionConfidence(0.5f).setMinPosePresenceConfidence(0.5f).build();
+        try (PoseLandmarker model = PoseLandmarker.createFromOptions(context, options);
+             MPImage input = new BitmapImageBuilder(bitmap).build()) {
+            return new PoseFrame(model.detect(input), bitmap.getWidth(), bitmap.getHeight(), false, 0, 0);
+        }
+    }
+
     private PoseDetector(Context context, Listener listener) {
         this.listener = listener;
         BaseOptions baseOptions = BaseOptions.builder()
@@ -70,7 +83,7 @@ public final class PoseDetector implements Closeable {
                 PoseLandmarker.PoseLandmarkerOptions.builder()
                         .setBaseOptions(baseOptions)
                         .setRunningMode(RunningMode.LIVE_STREAM)
-                        .setNumPoses(1)
+                        .setNumPoses(PoseGroup.MAX_PEOPLE + 1)
                         .setMinPoseDetectionConfidence(0.5f)
                         .setMinPosePresenceConfidence(0.5f)
                         .setMinTrackingConfidence(0.5f)

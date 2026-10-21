@@ -31,6 +31,40 @@ Download the heavy pose model (about 29 MB, used only here) to
 4. `python -I export_poses.py` writes `app/src/main/assets/poses/<id>.json`.
 5. Delete `cache/images/` and `cache/sheets/` once you're done.
 
+## Groups
+
+`extract_poses.py --groups --cache cache/groups` keeps 2–6 distinct people, rejects repeated
+detections of the same person, and preserves their formation in a shared frame. Review the
+whole photo next to the group silhouette: every person needs usable shoulders/hips, and the
+pose is upper-body if any member's legs are not clear. Horizontal position defines each role.
+
+If Openverse is unavailable, `fetch_commons.py --cache cache/groups --category "Standing couples"
+--category "Groups posing"` downloads CC BY/CC0/public-domain references with author and license
+metadata. Category membership is not a quality guarantee; manually review candidates before export.
+Only pose coordinates and credits ship. The photo used by the Android import test lives under
+`src/androidTest/assets`, not in the application APK.
+
+Export selected photographic groups with:
+
+```
+python export_poses.py --cache cache/groups --curation group_curation.json
+```
+
+`create_group_poses.py` regenerates six original, hand-authored group arrangements. These are
+explicitly credited as designed rather than traced from a photo. `--check` verifies that the
+bundled assets match the generator. Run the small normalization/duplicate checks with:
+
+```
+python -m unittest discover -s tools/pose_pipeline -p test_group_pipeline.py
+```
+
+Version 2 group JSON uses `"formatVersion": 2` and `"people": [landmarkRows, ...]` instead
+of `landmarks`. Each member still has 33 `[x,y,z,visibility]` rows. Coordinates for all members
+share an origin at the mean hip midpoint and a unit of the mean 2D torso length, preserving
+spacing and relative sizes. Both Android (`PoseGroup`) and Python (`normalize_group`) use this
+frame. Version 1 single-person files remain supported. Group templates use `mirrorAllowed=false`;
+the selfie preview mirrors the entire formation instead of choosing different sides per person.
+
 **Content warning:** Openverse's `mature=false` filter is not reliable. The
 first run returned several explicit images. The fetch script also drops
 results Openverse marks as sensitive, but review the sheets in private and

@@ -35,6 +35,7 @@ import com.s23cp5054.posewithme.ui.nearby.NearbyActivity;
 import com.s23cp5054.posewithme.ui.poses.PoseCardAdapter;
 import com.s23cp5054.posewithme.ui.poses.PoseDetailSheet;
 import com.s23cp5054.posewithme.ui.poses.PoseLibraryActivity;
+import com.s23cp5054.posewithme.ui.poses.ImportPoseActivity;
 import com.s23cp5054.posewithme.ui.settings.SettingsActivity;
 
 import java.util.Calendar;
@@ -83,6 +84,8 @@ public class MainActivity extends AppCompatActivity implements PoseDetailSheet.L
                         .putExtra(CameraActivity.EXTRA_RECORD_MODE, true)));
         findViewById(R.id.settingsButton).setOnClickListener(
                 v -> startActivity(new Intent(this, SettingsActivity.class)));
+        findViewById(R.id.importButton).setOnClickListener(
+                v -> startActivity(new Intent(this, ImportPoseActivity.class)));
         findViewById(R.id.recommendedMore).setOnClickListener(
                 v -> startActivity(new Intent(this, NearbyActivity.class)));
         ((RecyclerView) findViewById(R.id.recommendedList)).setAdapter(recommendedAdapter);

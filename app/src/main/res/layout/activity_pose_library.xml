@@ -56,10 +56,20 @@
             </LinearLayout>
         </LinearLayout>
 
+        <HorizontalScrollView
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:paddingHorizontal="14dp" android:scrollbars="none">
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/peopleFilters"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                app:singleLine="true" app:singleSelection="true" app:selectionRequired="true" />
+        </HorizontalScrollView>
+
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/poseGrid"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
             android:clipToPadding="false"
             android:paddingHorizontal="14dp"
             android:paddingBottom="96dp"
@@ -83,7 +93,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
         android:layout_margin="20dp"
-        android:text="@string/library_record"
+        android:text="@string/library_add"
         android:textColor="@color/white"
         app:backgroundTint="@color/brand_primary"
         app:icon="@drawable/ic_record"

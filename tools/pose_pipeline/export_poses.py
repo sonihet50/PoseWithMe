@@ -23,10 +23,11 @@ LICENSE_NAMES = {
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--cache", default=str(HERE / "cache"))
+    parser.add_argument("--curation", default=str(HERE / "curation.json"))
     args = parser.parse_args()
 
     candidates = json.loads((pathlib.Path(args.cache) / "candidates.json").read_text(encoding="utf-8"))
-    curation = json.loads((HERE / "curation.json").read_text(encoding="utf-8"))
+    curation = json.loads(pathlib.Path(args.curation).read_text(encoding="utf-8"))
     ASSETS.mkdir(parents=True, exist_ok=True)
 
     for entry in curation:
@@ -38,14 +39,14 @@ def main():
         if c["license"] not in LICENSE_NAMES:
             raise SystemExit(f"{entry['id']}: license {c['license']} not allowed")
         pose = {
-            "formatVersion": 1,
+            "formatVersion": 2 if "people" in c else 1,
             "id": entry["id"],
             "name": entry["name"],
             "description": entry["description"],
             "category": entry["category"],
             "difficulty": entry["difficulty"],
             "framing": entry.get("framing", c["framing"]),
-            "mirrorAllowed": entry.get("mirrorAllowed", True),
+            "mirrorAllowed": entry.get("mirrorAllowed", "people" not in c),
             "instructions": entry["instructions"],
             "scenes": entry["scenes"],
             "ignoredParts": entry.get("ignoredParts", []),
@@ -57,8 +58,8 @@ def main():
                 "license": LICENSE_NAMES[c["license"]].format(v=c["license_version"]),
                 "licenseUrl": c["license_url"],
             },
-            "landmarks": c["landmarks"],
         }
+        pose["people" if "people" in c else "landmarks"] = c.get("people", c.get("landmarks"))
         out = ASSETS / f"{entry['id']}.json"
         out.write_text(json.dumps(pose, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
         print(f"wrote {out.relative_to(HERE.parent.parent)}")

@@ -42,18 +42,25 @@ public final class MatchResult {
             RAISE_ARM, LOWER_ARM, BEND_ELBOW, STRAIGHTEN_ARM, ARM_OUT, ARM_IN,
             RAISE_LEG, LOWER_LEG, BEND_KNEE, STRAIGHTEN_LEG, LEG_OUT, LEG_IN,
             LEAN_LEFT, LEAN_RIGHT, STAND_STRAIGHT, TURN_BODY, FACE_CAMERA,
-            TILT_HEAD_LEFT, TILT_HEAD_RIGHT, HEAD_UP, HEAD_DOWN
+            TILT_HEAD_LEFT, TILT_HEAD_RIGHT, HEAD_UP, HEAD_DOWN, MATCH_SPACING
         }
 
         public final BodyPart part;
         public final Action action;
         /** Size of the difference in degrees, for "slightly" vs "more" wording. */
         public final float degrees;
+        /** Zero-based role in the reference image, or -1 for a solo/whole-group hint. */
+        public final int personIndex;
 
         Hint(BodyPart part, Action action, float degrees) {
+            this(part, action, degrees, -1);
+        }
+
+        Hint(BodyPart part, Action action, float degrees, int personIndex) {
             this.part = part;
             this.action = action;
             this.degrees = degrees;
+            this.personIndex = personIndex;
         }
     }
 }

@@ -90,7 +90,7 @@ def main():
         for page in range(1, args.pages + 1):
             try:
                 results = search(session, query, page, not args.any_aspect)
-            except requests.HTTPError as e:
+            except requests.RequestException as e:
                 print(f"search failed for {query!r} page {page}: {e}")
                 break
             finally:

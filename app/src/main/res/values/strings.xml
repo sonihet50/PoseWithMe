@@ -8,7 +8,6 @@
     <string name="home_hero_badge">LIVE · ON-DEVICE</string>
     <string name="home_hero_title">Start posing</string>
     <string name="home_hero_subtitle">A live skeleton guide that runs entirely on your phone.</string>
-    <string name="home_section_explore">Explore</string>
     <string name="home_recommended_title">Recommended for you</string>
     <string name="home_recommended_subtitle">Based on your favourites and styles</string>
     <string name="home_recommended_for">Picked for: %1$s</string>
@@ -34,7 +33,38 @@
     <string name="detail_try_pose">Try this pose</string>
     <string name="attribution_web">Pose traced from “%1$s” by %2$s, %3$s. The photo itself is not included in the app.</string>
     <string name="attribution_recorded">Recorded by the PoseWithMe team.</string>
-    <string name="attribution_user">Recorded on this phone.</string>
+    <string name="attribution_designed">Original group arrangement designed for PoseWithMe. Follow the numbered positions in the camera guide.</string>
+    <string name="attribution_user">Created on this phone. Imported source photos are never uploaded or copied into the pose library.</string>
+    <string name="library_add">Add a pose</string>
+    <string name="import_title">Import pose from image</string>
+    <string name="import_description">Choose a photo with one to six people. Review the extracted guide, name it, and save it to your library. Only pose coordinates are saved.</string>
+    <string name="import_choose">Choose image</string>
+    <string name="import_select_hint">Choose a clear photo with visible shoulders and hips.</string>
+    <string name="import_working">Extracting poses on your phone…</string>
+    <plurals name="import_ready">
+        <item quantity="one">Detected %1$d person. Check the silhouette before saving.</item>
+        <item quantity="other">Detected %1$d people. Check the silhouette before saving.</item>
+    </plurals>
+    <string name="import_unreadable">This image could not be opened. Choose another photo.</string>
+    <string name="import_no_person">No person detected. Try a clearer photo.</string>
+    <string name="import_not_visible">Every person needs visible shoulders and a usable hip position. Try a clearer photo.</string>
+    <string name="import_too_many">Choose an image with at most %1$d people.</string>
+    <string name="import_failed">Could not import pose: %1$s</string>
+    <string name="import_default_name">Imported pose</string>
+    <string name="camera_torch_on">Turn flashlight on</string>
+    <string name="camera_torch_off">Turn flashlight off</string>
+    <string name="camera_torch_unavailable">Flashlight unavailable on this camera</string>
+    <string name="camera_torch_failed">Could not change flashlight. Try again.</string>
+    <string name="category_couple">Couple</string>
+    <string name="category_friends">Friends</string>
+    <string name="category_group">Group</string>
+    <string name="pose_people">%1$d people</string>
+    <string name="filter_all">All</string>
+    <string name="filter_solo">Solo</string>
+    <string name="hint_group_visible">Keep all %1$d people in view with visible shoulders and hips</string>
+    <string name="hint_group_spacing">Match the spacing and positions shown by the numbered guides</string>
+    <string name="hint_person">Person %1$d: %2$s</string>
+    <string name="hint_follow_guide">Match the pose shown by the guide</string>
     <string name="meta_separator">" · "</string>
 
     <string name="framing_full_body">Full body</string>

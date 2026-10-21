@@ -30,11 +30,11 @@ MAX_TORSO_TILT_DEG = 35
 DUPLICATE_DISTANCE = 0.12      # mean joint distance in torso units
 
 
-def create_landmarker():
+def create_landmarker(groups=False):
     options = vision.PoseLandmarkerOptions(
         base_options=BaseOptions(model_asset_path=str(MODEL)),
         running_mode=vision.RunningMode.IMAGE,
-        num_poses=3,
+        num_poses=7 if groups else 3,
         min_pose_detection_confidence=0.5,
         min_pose_presence_confidence=0.5,
     )
@@ -52,11 +52,11 @@ def in_frame(lm, margin=0.02):
     return -margin <= lm.x <= 1 + margin and -margin <= lm.y <= 1 + margin
 
 
-def assess(landmarks, width, height):
+def assess(landmarks, width, height, group=False):
     """Returns (framing, metrics) or (None, reason)."""
     vis = lambda i: landmarks[i].visibility or 0.0
     core = (pk.LEFT_SHOULDER, pk.RIGHT_SHOULDER, pk.LEFT_HIP, pk.RIGHT_HIP)
-    if min(vis(i) for i in core) < MIN_CORE_VISIBILITY:
+    if min(vis(i) for i in core) < (0.5 if group else MIN_CORE_VISIBILITY):
         return None, "core not visible"
 
     px = lambda i: (landmarks[i].x * width, landmarks[i].y * height)
@@ -64,18 +64,18 @@ def assess(landmarks, width, height):
     sh = ((ls[0] + rs[0]) / 2, (ls[1] + rs[1]) / 2)
     hp = ((lh[0] + rh[0]) / 2, (lh[1] + rh[1]) / 2)
     torso = math.hypot(sh[0] - hp[0], sh[1] - hp[1])
-    if torso / height < MIN_TORSO_FRACTION:
+    if torso / height < (0.07 if group else MIN_TORSO_FRACTION):
         return None, "person too small"
     tilt = math.degrees(math.atan2(abs(sh[0] - hp[0]), hp[1] - sh[1]))
     if sh[1] >= hp[1] or tilt > MAX_TORSO_TILT_DEG:
         return None, "torso not upright"
     frontal = math.hypot(ls[0] - rs[0], ls[1] - rs[1]) / torso
-    if frontal < MIN_FRONTAL_RATIO:
+    if frontal < (0.35 if group else MIN_FRONTAL_RATIO):
         return None, "not front-facing"
 
     arms = (pk.LEFT_ELBOW, pk.RIGHT_ELBOW)
     legs = (pk.LEFT_KNEE, pk.RIGHT_KNEE, pk.LEFT_ANKLE, pk.RIGHT_ANKLE)
-    if min(vis(i) for i in arms) < MIN_LIMB_VISIBILITY:
+    if min(vis(i) for i in arms) < (0.4 if group else MIN_LIMB_VISIBILITY):
         return None, "arms not visible"
     if all(vis(i) >= MIN_LIMB_VISIBILITY and in_frame(landmarks[i]) for i in legs):
         framing = "full_body"
@@ -104,7 +104,8 @@ def contact_sheets(candidates, images_dir, out_dir, per_sheet=12, cols=4):
             photo = load_image(images_dir / c["file"])
             photo.thumbnail((tile_w, tile_h))
             sheet.paste(photo, (x0 + (tile_w - photo.width) // 2, y0 + (tile_h - photo.height) // 2))
-            sheet.paste(pk.render_silhouette(c["landmarks"]), (x0 + tile_w, y0))
+            guide = pk.render_group(c["people"]) if "people" in c else pk.render_silhouette(c["landmarks"])
+            sheet.paste(guide, (x0 + tile_w, y0))
             draw.text((x0 + 4, y0 + tile_h + 4),
                       f"{c['key']}  {c['openverse_id'][:8]}  {c['framing']}",
                       fill=(255, 255, 255))
@@ -114,12 +115,13 @@ def contact_sheets(candidates, images_dir, out_dir, per_sheet=12, cols=4):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--cache", default="cache")
+    parser.add_argument("--groups", action="store_true", help="extract 2 to 6 people as one formation")
     args = parser.parse_args()
     cache = pathlib.Path(args.cache)
     images_dir = cache / "images"
     rows = [json.loads(l) for l in (cache / "metadata.jsonl").read_text(encoding="utf-8").splitlines()]
 
-    landmarker = create_landmarker()
+    landmarker = create_landmarker(args.groups)
     candidates, rejected = [], {}
     for row in rows:
         path = images_dir / f"{row['id']}.img"
@@ -131,12 +133,21 @@ def main():
             rejected["unreadable"] = rejected.get("unreadable", 0) + 1
             continue
         result = landmarker.detect(mp.Image(image_format=mp.ImageFormat.SRGB, data=np.asarray(img)))
-        if len(result.pose_landmarks) != 1:
+        detected = pk.unique_people(result.pose_landmarks, img.width, img.height)
+        count = len(detected)
+        if (args.groups and not 2 <= count <= 6) or (not args.groups and count != 1):
             reason = "no person" if not result.pose_landmarks else "several people"
             rejected[reason] = rejected.get(reason, 0) + 1
             continue
-        landmarks = result.pose_landmarks[0]
-        framing, info = assess(landmarks, img.width, img.height)
+        landmarks = detected[0]
+        framing, info = assess(landmarks, img.width, img.height, args.groups)
+        if args.groups:
+            assessments = [assess(person, img.width, img.height, True)
+                           for person in detected]
+            if any(f is None for f, _ in assessments):
+                framing, info = None, "group member not usable"
+            else:
+                framing = "full_body" if all(f == "full_body" for f, _ in assessments) else "upper_body"
         if framing is None:
             rejected[info] = rejected.get(info, 0) + 1
             continue
@@ -156,13 +167,19 @@ def main():
             "pixels": img.width * img.height,
             "landmarks": normalized,
         })
+        if args.groups:
+            candidates[-1]["people"] = pk.normalize_group(detected, img.width, img.height)
+            candidates[-1]["person_count"] = count
+            candidates[-1].pop("landmarks")
 
     # Drop near-duplicates, keeping the larger image.
     candidates.sort(key=lambda c: -c["pixels"])
     unique = []
     for c in candidates:
-        if all(pk.mean_joint_distance(c["landmarks"], u["landmarks"]) > DUPLICATE_DISTANCE
-               for u in unique if u["framing"] == c["framing"]):
+        if all((sum(pk.mean_joint_distance(a, b) for a, b in zip(c["people"], u["people"]))
+                / len(c["people"]) if args.groups else pk.mean_joint_distance(c["landmarks"], u["landmarks"]))
+               > DUPLICATE_DISTANCE for u in unique if u["framing"] == c["framing"]
+               and u.get("person_count", 1) == c.get("person_count", 1)):
             unique.append(c)
         else:
             rejected["duplicate"] = rejected.get("duplicate", 0) + 1
@@ -172,6 +189,7 @@ def main():
 
     (cache / "candidates.json").write_text(json.dumps(unique, indent=1), encoding="utf-8")
     contact_sheets(unique, images_dir, cache / "sheets")
+    landmarker.close()
     print(f"{len(unique)} candidates from {len(rows)} images; rejected: {rejected}")
 
 

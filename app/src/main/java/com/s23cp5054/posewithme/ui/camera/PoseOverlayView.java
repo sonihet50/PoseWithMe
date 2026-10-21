@@ -17,6 +17,7 @@ import com.s23cp5054.posewithme.pose.matching.MatchResult;
 import com.s23cp5054.posewithme.pose.model.BodyPose;
 import com.s23cp5054.posewithme.pose.model.Landmark;
 import com.s23cp5054.posewithme.pose.model.PoseTemplate;
+import com.s23cp5054.posewithme.pose.model.PoseGroup;
 import com.s23cp5054.posewithme.ui.pose.SilhouetteRenderer;
 
 import java.util.Map;
@@ -73,6 +74,8 @@ public class PoseOverlayView extends View {
     private float anchorX;
     private float anchorY;
     private float anchorScale;
+    private final float[] groupFit = new float[3];
+    private final Paint rolePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     public PoseOverlayView(Context context, @Nullable AttributeSet attrs) {
         super(context, attrs);
@@ -86,6 +89,10 @@ public class PoseOverlayView extends View {
         offPaint = linePaint(color(R.color.match_off), density);
         jointFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         jointFillPaint.setColor(color(R.color.white));
+        rolePaint.setColor(color(R.color.white));
+        rolePaint.setTextSize(16f * getResources().getDisplayMetrics().scaledDensity);
+        rolePaint.setTextAlign(Paint.Align.CENTER);
+        rolePaint.setShadowLayer(3f * density, 0, 0, color(R.color.black));
         ghostRenderer = new SilhouetteRenderer(color(R.color.ghost_near), color(R.color.ghost_far));
     }
 
@@ -146,11 +153,23 @@ public class PoseOverlayView extends View {
             drawGhost(canvas, hasPerson ? f : null);
         }
         if (hasPerson && showSkeleton) {
-            drawSkeleton(canvas, f);
+            for (int i = 0; i < f.imagePoses.size(); i++) {
+                drawSkeleton(canvas, f.imagePoses.get(i), f.imageWidth, f.imageHeight);
+                if (target != null && target.people.size() > 1) {
+                    BodyPose person = f.imagePoses.get(i);
+                    canvas.drawText(String.valueOf(i + 1),
+                            transform.mapX(PoseGroup.hipX(person) / f.imageWidth),
+                            transform.mapY(PoseGroup.hipY(person) / f.imageHeight), rolePaint);
+                }
+            }
         }
     }
 
     private void drawGhost(Canvas canvas, @Nullable PoseFrame f) {
+        if (target.people.size() > 1) {
+            drawGroupGhost(canvas, f);
+            return;
+        }
         float x;
         float y;
         float scale;
@@ -201,22 +220,65 @@ public class PoseOverlayView extends View {
         canvas.restoreToCount(save);
     }
 
-    private void drawSkeleton(Canvas canvas, PoseFrame f) {
+    private void drawGroupGhost(Canvas canvas, @Nullable PoseFrame f) {
+        boolean usable = f != null && f.imagePoses.size() == target.people.size()
+                && !f.toBodyPoses(target.framing == PoseTemplate.Framing.UPPER_BODY).isEmpty();
+        boolean mirror = frame != null && frame.mirrored;
+        if (usable) {
+            float x = 0f, y = 0f, scale = 0f;
+            for (BodyPose person : f.imagePoses) {
+                x += transform.mapX(PoseGroup.hipX(person) / f.imageWidth);
+                y += transform.mapY(PoseGroup.hipY(person) / f.imageHeight);
+                scale += PoseGroup.torso(person);
+            }
+            int count = f.imagePoses.size();
+            x /= count;
+            y /= count;
+            scale = scale / count * Math.max((float) getWidth() / f.imageWidth,
+                    (float) getHeight() / f.imageHeight);
+            if (!anchorValid) {
+                anchorX = x; anchorY = y; anchorScale = scale;
+            } else {
+                anchorX += ANCHOR_ALPHA * (x - anchorX);
+                anchorY += ANCHOR_ALPHA * (y - anchorY);
+                anchorScale += ANCHOR_ALPHA * (scale - anchorScale);
+            }
+            anchorValid = true;
+        } else {
+            SilhouetteRenderer.fit(target.people, 0.3f, getWidth() * 0.05f,
+                    getHeight() * 0.05f, getWidth() * 0.9f, getHeight() * 0.9f, groupFit);
+            anchorX = mirror ? getWidth() - groupFit[0] : groupFit[0];
+            anchorY = groupFit[1];
+            anchorScale = groupFit[2];
+            anchorValid = false;
+        }
+        int save = canvas.saveLayerAlpha(0, 0, getWidth(), getHeight(), GHOST_ALPHA);
+        for (int i = 0; i < target.people.size(); i++) {
+            BodyPose person = target.people.get(i);
+            ghostRenderer.draw(canvas, person, anchorX, anchorY, anchorScale, mirror);
+            canvas.drawText(String.valueOf(i + 1), anchorX + (mirror ? -1f : 1f)
+                    * PoseGroup.hipX(person) * anchorScale,
+                    anchorY + PoseGroup.hipY(person) * anchorScale, rolePaint);
+        }
+        canvas.restoreToCount(save);
+    }
+
+    private void drawSkeleton(Canvas canvas, BodyPose f, int imageWidth, int imageHeight) {
         for (int[] connection : CONNECTIONS) {
             int a = connection[0];
             int b = connection[1];
             if (f.visibility[a] < MIN_VISIBILITY || f.visibility[b] < MIN_VISIBILITY) {
                 continue;
             }
-            canvas.drawLine(transform.mapX(f.x[a]), transform.mapY(f.y[a]),
-                    transform.mapX(f.x[b]), transform.mapY(f.y[b]), paintFor(a, b));
+            canvas.drawLine(transform.mapX(f.x[a] / imageWidth), transform.mapY(f.y[a] / imageHeight),
+                    transform.mapX(f.x[b] / imageWidth), transform.mapY(f.y[b] / imageHeight), paintFor(a, b));
         }
         for (int i : JOINTS) {
             if (f.visibility[i] < MIN_VISIBILITY) {
                 continue;
             }
-            float cx = transform.mapX(f.x[i]);
-            float cy = transform.mapY(f.y[i]);
+            float cx = transform.mapX(f.x[i] / imageWidth);
+            float cy = transform.mapY(f.y[i] / imageHeight);
             canvas.drawCircle(cx, cy, jointRadius, jointFillPaint);
             canvas.drawCircle(cx, cy, jointRadius, paintFor(i, i));
         }
@@ -224,7 +286,7 @@ public class PoseOverlayView extends View {
 
     private Paint paintFor(int a, int b) {
         Map<BodyPart, MatchResult.Status> status = partStatus;
-        if (target != null && status != null) {
+        if (target != null && target.people.size() == 1 && status != null) {
             MatchResult.Status s = status.get(partOf(a, b));
             if (s == MatchResult.Status.GOOD) {
                 return goodPaint;

@@ -20,6 +20,9 @@ public final class PoseLabels {
             case "monument": return context.getString(R.string.category_monument);
             case "scenic": return context.getString(R.string.category_scenic);
             case "cafe": return context.getString(R.string.category_cafe);
+            case "couple": return context.getString(R.string.category_couple);
+            case "friends": return context.getString(R.string.category_friends);
+            case "group": return context.getString(R.string.category_group);
             default: return context.getString(R.string.category_casual_standing);
         }
     }
@@ -39,7 +42,10 @@ public final class PoseLabels {
 
     /** "Full body · Easy" */
     public static String shortMeta(Context context, PoseTemplate pose) {
-        return framing(context, pose.framing) + context.getString(R.string.meta_separator)
+        String people = pose.people.size() > 1
+                ? context.getString(R.string.pose_people, pose.people.size())
+                + context.getString(R.string.meta_separator) : "";
+        return people + framing(context, pose.framing) + context.getString(R.string.meta_separator)
                 + difficulty(context, pose.difficulty);
     }
 

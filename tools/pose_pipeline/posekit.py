@@ -53,6 +53,48 @@ def normalize(landmarks, width, height):
     return rows
 
 
+def normalize_group(people, width, height):
+    """Common frame shared with PoseGroup.java; keep spacing and relative body sizes."""
+    if not 1 <= len(people) <= 6:
+        raise ValueError("Expected 1 to 6 people")
+    hips = [((p[LEFT_HIP].x + p[RIGHT_HIP].x) / 2 * width,
+             (p[LEFT_HIP].y + p[RIGHT_HIP].y) / 2 * height) for p in people]
+    lengths = [math.hypot((p[LEFT_SHOULDER].x + p[RIGHT_SHOULDER].x) / 2 * width - hx,
+                          (p[LEFT_SHOULDER].y + p[RIGHT_SHOULDER].y) / 2 * height - hy)
+               for p, (hx, hy) in zip(people, hips)]
+    if any(not math.isfinite(length) or length < 1e-3 for length in lengths):
+        raise ValueError("Person has no usable torso")
+    ox = sum(h[0] for h in hips) / len(hips)
+    oy = sum(h[1] for h in hips) / len(hips)
+    unit = sum(lengths) / len(lengths)
+    ordered = sorted(zip(people, hips), key=lambda item: item[1][0])
+    return [[[round((lm.x * width - ox) / unit, 4),
+              round((lm.y * height - oy) / unit, 4), round(lm.z * width / unit, 4),
+              round(lm.visibility or 0.0, 4)] for lm in person] for person, _ in ordered]
+
+
+def unique_people(people, width, height):
+    """Remove duplicate detections; thresholds mirror PoseGroup.samePerson()."""
+    def same(a, b):
+        hip = lambda p: ((p[LEFT_HIP].x + p[RIGHT_HIP].x) / 2 * width,
+                         (p[LEFT_HIP].y + p[RIGHT_HIP].y) / 2 * height)
+        length = lambda p: math.hypot((p[LEFT_SHOULDER].x + p[RIGHT_SHOULDER].x) / 2 * width - hip(p)[0],
+                                      (p[LEFT_SHOULDER].y + p[RIGHT_SHOULDER].y) / 2 * height - hip(p)[1])
+        unit = min(length(a), length(b))
+        if unit < 1e-3 or math.dist(hip(a), hip(b)) > .25 * unit:
+            return False
+        joints = [i for i in (0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28)
+                  if (a[i].visibility or 0) >= .5 and (b[i].visibility or 0) >= .5]
+        return len(joints) >= 4 and sum(math.hypot((a[i].x - b[i].x) * width,
+                                                   (a[i].y - b[i].y) * height)
+                                        for i in joints) / len(joints) < .2 * unit
+    unique = []
+    for person in people:
+        if not any(same(person, other) for other in unique):
+            unique.append(person)
+    return unique
+
+
 # Silhouette proportions in torso units. Mirrors SilhouetteRenderer.java.
 SHOULDER_PUSH = 0.03
 HIP_PUSH = 0.07
@@ -85,12 +127,12 @@ def _capsule(draw, p1, p2, r1, r2, fill):
 
 
 def render_silhouette(rows, size=(256, 320), min_visibility=0.3,
-                      near=(196, 178, 255), far=(132, 112, 214), bg=(20, 20, 28)):
+                      near=(196, 178, 255), far=(132, 112, 214), bg=(20, 20, 28), bounds=None):
     """Draws a body-frame pose as a mannequin silhouette, fitted into the image."""
     w, h = size
     img = Image.new("RGB", size, bg)
     draw = ImageDraw.Draw(img)
-    visible = [r for r in rows if r[3] >= min_visibility]
+    visible = [r for r in (bounds if bounds is not None else rows) if r[3] >= min_visibility]
     xs = [r[0] for r in visible] + [-0.6, 0.6]
     ys = [r[1] for r in visible] + [-1.6, 0.3]
     min_x, max_x, min_y, max_y = min(xs) - 0.3, max(xs) + 0.3, min(ys) - 0.35, max(ys) + 0.2
@@ -164,6 +206,16 @@ def render_silhouette(rows, size=(256, 320), min_visibility=0.3,
     for _, fn in sorted(parts, key=lambda p: -p[0]):
         fn()
     return img
+
+
+def render_group(people, size=(256, 320)):
+    bounds = [row for person in people for row in person]
+    result = Image.new("RGB", size, (20, 20, 28))
+    for person in people:
+        layer = render_silhouette(person, size=size, bounds=bounds)
+        mask = layer.convert("L").point(lambda value: 255 if value > 35 else 0)
+        result.paste(layer, (0, 0), mask)
+    return result
 
 
 def mean_joint_distance(a, b, joints=None):

@@ -7,6 +7,8 @@ import android.graphics.RectF;
 
 import com.s23cp5054.posewithme.pose.model.BodyPose;
 import com.s23cp5054.posewithme.pose.model.Landmark;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Draws a {@link BodyPose} as an abstract mannequin: tapered capsules for limbs, a rounded
@@ -158,16 +160,23 @@ public final class SilhouetteRenderer {
      */
     public static void fit(BodyPose pose, float minVisibility, float left, float top,
                            float width, float height, float[] out) {
+        fit(Collections.singletonList(pose), minVisibility, left, top, width, height, out);
+    }
+
+    public static void fit(List<BodyPose> people, float minVisibility, float left, float top,
+                           float width, float height, float[] out) {
         float minX = -0.6f;
         float maxX = 0.6f;
         float minY = -1.6f;
         float maxY = 0.3f;
-        for (int i = 0; i < Landmark.COUNT; i++) {
-            if (pose.visibility[i] >= minVisibility) {
-                minX = Math.min(minX, pose.x[i]);
-                maxX = Math.max(maxX, pose.x[i]);
-                minY = Math.min(minY, pose.y[i]);
-                maxY = Math.max(maxY, pose.y[i]);
+        for (BodyPose pose : people) {
+            for (int i = 0; i < Landmark.COUNT; i++) {
+                if (pose.visibility[i] >= minVisibility) {
+                    minX = Math.min(minX, pose.x[i]);
+                    maxX = Math.max(maxX, pose.x[i]);
+                    minY = Math.min(minY, pose.y[i]);
+                    maxY = Math.max(maxY, pose.y[i]);
+                }
             }
         }
         minX -= 0.3f;

@@ -17,6 +17,9 @@ import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.s23cp5054.posewithme.R;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.chip.Chip;
+import com.google.android.material.chip.ChipGroup;
 import com.s23cp5054.posewithme.data.repository.FavoritesRepository;
 import com.s23cp5054.posewithme.data.repository.PoseRepository;
 import com.s23cp5054.posewithme.pose.model.PoseTemplate;
@@ -50,6 +53,8 @@ public class PoseLibraryActivity extends AppCompatActivity implements PoseDetail
     private TextView emptyText;
     private boolean pickMode;
     private boolean favoritesOnly;
+    private int peopleFilter;
+    private List<PoseTemplate> loadedPoses = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -88,12 +93,31 @@ public class PoseLibraryActivity extends AppCompatActivity implements PoseDetail
         emptyText = findViewById(R.id.emptyText);
         emptyText.setText(favoritesOnly ? R.string.favorites_empty : R.string.library_empty);
         findViewById(R.id.backButton).setOnClickListener(v -> finish());
-        recordButton.setOnClickListener(v -> startActivity(
-                new Intent(this, CameraActivity.class)
-                        .putExtra(CameraActivity.EXTRA_RECORD_MODE, true)));
+        recordButton.setOnClickListener(v -> new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.library_add)
+                .setItems(new String[]{getString(R.string.library_record), getString(R.string.import_title)},
+                        (dialog, which) -> startActivity(which == 0
+                                ? new Intent(this, CameraActivity.class).putExtra(CameraActivity.EXTRA_RECORD_MODE, true)
+                                : new Intent(this, ImportPoseActivity.class)))
+                .show());
 
         grid.setLayoutManager(new GridLayoutManager(this, 2));
         grid.setAdapter(adapter);
+        ChipGroup filters = findViewById(R.id.peopleFilters);
+        int[] filterLabels = {R.string.filter_all, R.string.filter_solo, R.string.category_couple,
+                R.string.category_friends, R.string.category_group};
+        for (int i = 0; i < filterLabels.length; i++) {
+            final int selected = i;
+            Chip chip = new Chip(this);
+            chip.setId(View.generateViewId());
+            chip.setText(filterLabels[i]);
+            chip.setCheckable(true);
+            filters.addView(chip);
+            chip.setChecked(i == peopleFilter);
+            chip.setOnCheckedChangeListener((button, checked) -> {
+                if (checked) { peopleFilter = selected; renderPoses(); }
+            });
+        }
     }
 
     @Override
@@ -129,6 +153,18 @@ public class PoseLibraryActivity extends AppCompatActivity implements PoseDetail
     }
 
     private void showPoses(List<PoseTemplate> poses) {
+        loadedPoses = poses;
+        renderPoses();
+    }
+
+    private void renderPoses() {
+        List<PoseTemplate> poses = new ArrayList<>();
+        for (PoseTemplate pose : loadedPoses) {
+            if (peopleFilter == 0 || peopleFilter == 1 && pose.people.size() == 1
+                    || peopleFilter == 2 && "couple".equals(pose.category)
+                    || peopleFilter == 3 && "friends".equals(pose.category)
+                    || peopleFilter == 4 && pose.people.size() >= 3) poses.add(pose);
+        }
         adapter.setPoses(poses);
         countText.setText(getResources().getQuantityString(R.plurals.library_count,
                 poses.size(), poses.size()));

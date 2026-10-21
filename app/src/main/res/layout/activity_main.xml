@@ -221,6 +221,15 @@
         </com.google.android.material.card.MaterialCardView>
 
         <!-- Recommended -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/importButton"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="12dp"
+            android:text="@string/import_title"
+            app:icon="@drawable/ic_gallery" />
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -268,24 +277,17 @@
             app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
             tools:listitem="@layout/item_pose_mini" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="28dp"
-            android:layout_marginBottom="12dp"
-            android:text="@string/home_section_explore"
-            android:textAppearance="@style/TextAppearance.PoseWithMe.SectionTitle" />
-
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
             android:orientation="horizontal">
 
             <include
                 android:id="@+id/tileBrowse"
                 layout="@layout/item_home_tile"
                 android:layout_width="0dp"
-                android:layout_height="match_parent"
+                android:layout_height="wrap_content"
                 android:layout_weight="1" />
 
             <Space
@@ -296,7 +298,7 @@
                 android:id="@+id/tileNearby"
                 layout="@layout/item_home_tile"
                 android:layout_width="0dp"
-                android:layout_height="match_parent"
+                android:layout_height="wrap_content"
                 android:layout_weight="1" />
         </LinearLayout>
 
@@ -310,7 +312,7 @@
                 android:id="@+id/tilePhotos"
                 layout="@layout/item_home_tile"
                 android:layout_width="0dp"
-                android:layout_height="match_parent"
+                android:layout_height="wrap_content"
                 android:layout_weight="1" />
 
             <Space
@@ -321,7 +323,7 @@
                 android:id="@+id/tileFavorites"
                 layout="@layout/item_home_tile"
                 android:layout_width="0dp"
-                android:layout_height="match_parent"
+                android:layout_height="wrap_content"
                 android:layout_weight="1" />
         </LinearLayout>
     </LinearLayout>

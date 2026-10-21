@@ -5,7 +5,9 @@ import androidx.annotation.Nullable;
 import com.s23cp5054.posewithme.pose.model.BodyPose;
 import com.s23cp5054.posewithme.pose.model.Landmark;
 import com.s23cp5054.posewithme.pose.model.PoseTemplate;
+import com.s23cp5054.posewithme.pose.model.PoseGroup;
 
+import java.util.List;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.Set;
@@ -76,6 +78,46 @@ public final class PoseMatcher {
         }
         MatchResult mirrored = match(live, target.pose.mirrored(), mirroredIgnored, true);
         return mirrored.score > direct.score ? mirrored : direct;
+    }
+
+    /** Group roles follow the reference from left to right; every person must be visible. */
+    @Nullable
+    public MatchResult match(List<BodyPose> live, PoseTemplate target) {
+        // shortcut: roles follow horizontal position; add identity tracking for crossing or multi-row groups.
+        if (live.size() != target.people.size()) return null;
+        if (live.size() == 1) return match(PoseGroup.local(live.get(0)), target);
+        List<BodyPose> normalized = PoseGroup.normalize(live);
+        MatchResult worst = null;
+        int worstIndex = -1;
+        float coverage = 1f;
+        boolean reliable = true;
+        float formationError = 0f;
+        for (int i = 0; i < normalized.size(); i++) {
+            BodyPose reference = target.people.get(i);
+            // A group is mirrored as a formation by the preview, never independently per role.
+            PoseTemplate individual = new PoseTemplate(target.id, target.name, target.description,
+                    target.category, target.difficulty, target.framing, false,
+                    target.instructions, target.scenes, target.ignoredParts, target.source,
+                    PoseGroup.local(reference));
+            MatchResult result = match(PoseGroup.local(normalized.get(i)), individual);
+            if (worst == null || result.score < worst.score) {
+                worst = result;
+                worstIndex = i;
+            }
+            coverage = Math.min(coverage, result.coverage);
+            reliable &= result.reliable;
+            formationError = Math.max(formationError, (float) Math.hypot(
+                    PoseGroup.hipX(normalized.get(i)) - PoseGroup.hipX(reference),
+                    PoseGroup.hipY(normalized.get(i)) - PoseGroup.hipY(reference)));
+        }
+        float formationScore = Math.max(0f, Math.min(1f, (1.2f - formationError) / 0.9f));
+        MatchResult.Hint hint = worst.hint == null ? null : new MatchResult.Hint(
+                worst.hint.part, worst.hint.action, worst.hint.degrees, worstIndex);
+        if (formationScore < config.goodThreshold && formationScore < worst.score) {
+            hint = new MatchResult.Hint(BodyPart.TORSO, MatchResult.Hint.Action.MATCH_SPACING, 0f);
+        }
+        return new MatchResult(Math.min(worst.score, formationScore), coverage, reliable,
+                false, new EnumMap<>(worst.partScores), new EnumMap<>(worst.partStatus), hint);
     }
 
     private MatchResult match(BodyPose live, BodyPose target, Set<BodyPart> ignored,

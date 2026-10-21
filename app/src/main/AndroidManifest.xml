@@ -41,6 +41,9 @@
             </intent-filter>
         </activity>
         <activity
+            android:name=".ui.poses.ImportPoseActivity"
+            android:exported="false" />
+        <activity
             android:name=".ui.poses.PoseLibraryActivity"
             android:exported="false" />
         <activity
