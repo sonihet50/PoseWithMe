@@ -147,6 +147,7 @@
     <string name="record_ready_half">Waist-up: tap the button, then get into position</string>
     <string name="hint_auto_capture_hold">Hold it… taking the photo</string>
     <string name="camera_capture_failed">Couldn’t take the photo: %1$s</string>
+    <string name="camera_processing_photo">Hold still — capturing photo…</string>
     <string name="camera_storage_denied">Storage permission is needed to save photos on this Android version.</string>
 
     <!-- Photos & gallery -->

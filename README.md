@@ -19,7 +19,7 @@ SharedPreferences. There is no backend.
 | Pose library | 19 built-in poses, including 7 couple/friends/group arrangements for 2–6 people, with silhouettes, instructions and source credits; Solo/Couple/Friends/Group filters |
 | Import an image | Choose a photo using the system picker, extract 1–6 people on-device, review the silhouettes and framing, name/category it, and save only the landmarks |
 | Record a pose | Countdown, then "hold still" detection; the held frames are averaged into a reusable pose (full body or half body) |
-| Photo capture | Highest supported 4:3 still resolution, quality-priority capture, JPEG quality 100, hardware-supported high-quality noise reduction and edge processing; manual shutter, self-timer, auto-capture, Retake/Share/Keep |
+| Photo capture | Dedicated still session with high-resolution outputs enabled, quality-priority JPEG 100, OEM HDR/auto processing when available, automatic standard-capture fallback; manual shutter, self-timer, auto-capture, Retake/Share/Keep |
 | Gallery | Photos saved to `Pictures/PoseWithMe`; metadata in SQLite (pose, score, time); view, share, delete |
 | Favorites | Heart any pose; stored in SQLite |
 | Recommendations | Location, then a hand-picked landmark (offline) or an OpenStreetMap lookup, then a scene (beach, monument, park, café, scenic…), then ranked poses; manual scene picker as a fallback |
@@ -63,6 +63,13 @@ frame in flight; frames that arrive while it's busy are dropped, not queued.
 The result callback converts the landmarks to the body frame and runs the
 matcher, which is just arithmetic. The UI thread then draws the overlay and
 updates the hints.
+
+At the shutter, analysis pauses and the camera switches to a preview + still-capture session.
+This frees the stream combination for high-resolution output and manufacturer HDR/auto
+extensions, which may not support simultaneous image analysis. The chosen focus/exposure
+point is reapplied before capture. Pose analysis resumes on returning from photo review.
+The shutter animation runs after saving so its bright screen cannot affect selfie exposure.
+CameraX controls the camera's processing; no forced denoising/sharpening overrides are applied.
 
 ### How matching works
 
@@ -170,8 +177,11 @@ logcat by `PoseWithMe.Perf`, to repeat these measurements.
 - Multi-person detection is capped at six distinct people and needs separation and visible
   shoulders/hips. Large groups increase inference time. Imported silhouettes must be reviewed
   because an occluded person can be missed by the model.
-- High-quality camera processing depends on the hardware; it does not reproduce every
-  proprietary HDR/night-mode feature of the phone's stock camera. Tap a subject to focus.
+- OEM HDR/auto processing is used only where exposed through CameraX Extensions. Other cameras
+  use standard quality-priority capture. Switching sessions, autofocus, and HDR add shutter
+  delay; hold still until capture completes. Full 50 MP sensor modes are not guaranteed:
+  CameraX's high-resolution output pool does not include Android's separate maximum-resolution
+  sensor pixel mode or private modes reserved for the stock camera. Tap a subject to focus.
 - Sharing recorded poses between users is not built yet. A pose is a 2 KB JSON
   file, so file or QR-code sharing would be a natural next step without needing
   a server.

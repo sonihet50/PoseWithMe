@@ -5,8 +5,6 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
-import android.hardware.camera2.CameraCharacteristics;
-import android.hardware.camera2.CaptureRequest;
 import android.os.Bundle;
 import android.os.Debug;
 import android.os.Handler;
@@ -49,8 +47,8 @@ import androidx.camera.core.ViewPort;
 import androidx.camera.core.resolutionselector.AspectRatioStrategy;
 import androidx.camera.core.resolutionselector.ResolutionSelector;
 import androidx.camera.core.resolutionselector.ResolutionStrategy;
-import androidx.camera.camera2.interop.Camera2CameraInfo;
-import androidx.camera.camera2.interop.Camera2Interop;
+import androidx.camera.extensions.ExtensionMode;
+import androidx.camera.extensions.ExtensionsManager;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
 import androidx.core.content.ContextCompat;
@@ -164,6 +162,9 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
     private ProcessCameraProvider cameraProvider;
     @Nullable
     private ImageCapture imageCapture;
+    @Nullable private ExtensionsManager extensionsManager;
+    private boolean captureSession;
+    private volatile boolean analysisPaused;
     private volatile PoseDetector poseDetector;
     private volatile boolean frontCamera;
     /** Read on the MediaPipe thread for matching; written on the main thread. */
@@ -181,6 +182,8 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
     /** Uptime at which the self-timer fires, or -1 when no countdown is running. */
     private long captureAtMs = -1;
     private boolean capturing;
+    private float focusX = 0.5f;
+    private float focusY = 0.5f;
 
     private final ActivityResultLauncher<String> cameraPermissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
@@ -349,6 +352,7 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
     @Override
     protected void onResume() {
         super.onResume();
+        if (captureSession && !capturing) bindCameraUseCases(false);
         showHints = settings.isShowHints();
         autoCaptureEnabled = settings.isAutoCapture();
         autoCapture.setThreshold(settings.getAutoCaptureThreshold());
@@ -509,25 +513,33 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
     }
 
     private void takePhoto() {
-        ImageCapture capture = imageCapture;
-        if (capture == null || capturing) {
+        if (imageCapture == null || capturing) {
             return;
         }
         if (PhotoStorage.needsWritePermission(this)) {
             storagePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE);
             return;
         }
-        capturing = true;
+        setCapturing(true);
         autoCapture.disarm();
         PoseTemplate pose = mode == Mode.GUIDE ? target : null;
         Float score = pose != null && smoother.isReliable() && smoother.getScore() >= 0
                 ? smoother.getScore() : null;
         long now = System.currentTimeMillis();
         shutterButton.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
-        flash();
+
+        // The still session releases the analysis stream's resolution and OEM-processing limits.
+        if (!bindCameraUseCases(true) && !bindCameraUseCases(false)) {
+            setCapturing(false);
+            return;
+        }
+        ImageCapture stillCapture = imageCapture;
+        showStatus(getString(R.string.camera_processing_photo));
 
         boolean mirror = frontCamera && settings.isMirrorSelfies();
-        capture.takePicture(PhotoStorage.outputOptions(this, now, mirror), ioExecutor,
+        Runnable shoot = () -> {
+            if (isDestroyed() || isFinishing()) return;
+            stillCapture.takePicture(PhotoStorage.outputOptions(this, now, mirror), ioExecutor,
                 new ImageCapture.OnImageSavedCallback() {
                     @Override
                     public void onImageSaved(@NonNull ImageCapture.OutputFileResults results) {
@@ -540,7 +552,9 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
                                 results.getSavedUri(), pose != null ? pose.id : null,
                                 pose != null ? pose.name : null, score, now);
                         mainHandler.post(() -> {
-                            capturing = false;
+                            if (isDestroyed()) return;
+                            setCapturing(false);
+                            flash();
                             refreshGalleryThumbnail();
                             startActivity(new Intent(CameraActivity.this, PhotoActivity.class)
                                     .putExtra(PhotoActivity.EXTRA_PHOTO_ID, id)
@@ -552,13 +566,34 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
                     public void onError(@NonNull ImageCaptureException e) {
                         Log.e(TAG, "Photo capture failed", e);
                         mainHandler.post(() -> {
-                            capturing = false;
+                            if (isDestroyed()) return;
+                            setCapturing(false);
+                            bindCameraUseCases(false);
+                            statusText.setVisibility(View.GONE);
                             Snackbar.make(galleryButton,
                                     getString(R.string.camera_capture_failed, e.getMessage()),
                                     Snackbar.LENGTH_LONG).show();
                         });
                     }
                 });
+        };
+        // Reapply the chosen subject after switching sessions; fixed-focus cameras can still capture.
+        FocusMeteringAction focus = new FocusMeteringAction.Builder(
+                previewView.getMeteringPointFactory().createPoint(
+                        focusX * previewView.getWidth(), focusY * previewView.getHeight()),
+                FocusMeteringAction.FLAG_AF | FocusMeteringAction.FLAG_AE)
+                .setAutoCancelDuration(5, TimeUnit.SECONDS).build();
+        camera.getCameraControl().startFocusAndMetering(focus)
+                .addListener(shoot, ContextCompat.getMainExecutor(this));
+    }
+
+    private void setCapturing(boolean value) {
+        capturing = value;
+        shutterButton.setEnabled(!value);
+        galleryButton.setEnabled(!value);
+        torchButton.setEnabled(!value && camera != null && camera.getCameraInfo().hasFlashUnit());
+        findViewById(R.id.flipButton).setEnabled(!value);
+        modeLabel.setEnabled(!value);
     }
 
     private void flash() {
@@ -627,7 +662,18 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
         future.addListener(() -> {
             try {
                 cameraProvider = future.get();
-                bindCameraUseCases();
+                bindCameraUseCases(false);
+                ListenableFuture<ExtensionsManager> extensions =
+                        ExtensionsManager.getInstanceAsync(this, cameraProvider);
+                extensions.addListener(() -> {
+                    try {
+                        extensionsManager = extensions.get();
+                    } catch (ExecutionException e) {
+                        Log.w(TAG, "OEM photo extensions unavailable", e);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }, ContextCompat.getMainExecutor(this));
             } catch (ExecutionException | InterruptedException e) {
                 Log.e(TAG, "Camera provider unavailable", e);
                 showStatus(getString(R.string.camera_bind_failed, e.getMessage()));
@@ -642,19 +688,18 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
         lensFacing = lensFacing == CameraSelector.LENS_FACING_FRONT
                 ? CameraSelector.LENS_FACING_BACK
                 : CameraSelector.LENS_FACING_FRONT;
-        bindCameraUseCases();
+        bindCameraUseCases(false);
     }
 
-    @android.annotation.SuppressLint("UnsafeOptInUsageError")
-    private void bindCameraUseCases() {
+    private boolean bindCameraUseCases(boolean captureOnly) {
         ProcessCameraProvider provider = cameraProvider;
         if (provider == null || isDestroyed()) {
-            return;
+            return false;
         }
         // The viewport is only known once the preview has been laid out.
         if (previewView.getViewPort() == null) {
-            previewView.post(this::bindCameraUseCases);
-            return;
+            if (!captureOnly) previewView.post(() -> bindCameraUseCases(false));
+            return false;
         }
         CameraSelector selector = new CameraSelector.Builder().requireLensFacing(lensFacing).build();
         try {
@@ -668,8 +713,25 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
             Log.w(TAG, "Could not query cameras", e);
         }
 
-        // All streams share a 4:3 aspect ratio so the overlay mapping holds and the saved
-        // photo shows the same framing as the 3:4 viewfinder.
+        boolean torchOn = camera != null
+                && Integer.valueOf(TorchState.ON).equals(camera.getCameraInfo().getTorchState().getValue());
+        CameraSelector photoSelector = selector;
+        String processing = "standard";
+        if (captureOnly && !torchOn && extensionsManager != null) {
+            try {
+                for (int extension : new int[]{ExtensionMode.HDR, ExtensionMode.AUTO}) {
+                    if (extensionsManager.isExtensionAvailable(selector, extension)) {
+                        photoSelector = extensionsManager.getExtensionEnabledCameraSelector(selector, extension);
+                        processing = extension == ExtensionMode.HDR ? "OEM HDR" : "OEM auto";
+                        break;
+                    }
+                }
+            } catch (RuntimeException e) {
+                Log.w(TAG, "Could not query OEM extensions; using standard capture", e);
+            }
+        }
+
+        // Keep the preview and saved image framing consistent with the guide.
         ResolutionSelector fourByThree = new ResolutionSelector.Builder()
                 .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
                 .build();
@@ -687,53 +749,47 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
                 .build();
         analysis.setAnalyzer(analysisExecutor, this::analyzeFrame);
 
-        ImageCapture.Builder captureBuilder = new ImageCapture.Builder()
+        ImageCapture capture = new ImageCapture.Builder()
                 .setResolutionSelector(new ResolutionSelector.Builder()
                         .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
                         .setResolutionStrategy(ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY)
+                        .setAllowedResolutionMode(captureOnly
+                                ? ResolutionSelector.PREFER_HIGHER_RESOLUTION_OVER_CAPTURE_RATE
+                                : ResolutionSelector.PREFER_CAPTURE_RATE_OVER_HIGHER_RESOLUTION)
                         .build())
                 .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
-                .setJpegQuality(100);
-        // Request the camera's own still-photo processing only when the hardware advertises it.
-        try {
-            Camera2CameraInfo camera2 = Camera2CameraInfo.from(provider.getCameraInfo(selector));
-            Camera2Interop.Extender<ImageCapture> processing = new Camera2Interop.Extender<>(captureBuilder);
-            int[] noiseModes = camera2.getCameraCharacteristic(
-                    CameraCharacteristics.NOISE_REDUCTION_AVAILABLE_NOISE_REDUCTION_MODES);
-            boolean noise = supportsMode(noiseModes, CaptureRequest.NOISE_REDUCTION_MODE_HIGH_QUALITY);
-            if (noise) {
-                processing.setCaptureRequestOption(CaptureRequest.NOISE_REDUCTION_MODE,
-                        CaptureRequest.NOISE_REDUCTION_MODE_HIGH_QUALITY);
-            }
-            int[] edgeModes = camera2.getCameraCharacteristic(CameraCharacteristics.EDGE_AVAILABLE_EDGE_MODES);
-            boolean edge = supportsMode(edgeModes, CaptureRequest.EDGE_MODE_HIGH_QUALITY);
-            if (edge) {
-                processing.setCaptureRequestOption(CaptureRequest.EDGE_MODE, CaptureRequest.EDGE_MODE_HIGH_QUALITY);
-            }
-            Log.i(PERF_TAG, "Still quality: JPEG 100, high-quality noise=" + noise + ", edge=" + edge);
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            Log.w(TAG, "Optional camera processing unavailable; using quality capture defaults", e);
-        }
-        ImageCapture capture = captureBuilder.build();
+                .setJpegQuality(100)
+                .build();
 
         ViewPort viewPort = previewView.getViewPort();
-        UseCaseGroup group = new UseCaseGroup.Builder()
+        UseCaseGroup.Builder groupBuilder = new UseCaseGroup.Builder()
                 .setViewPort(viewPort)
                 .addUseCase(preview)
-                .addUseCase(analysis)
-                .addUseCase(capture)
-                .build();
+                .addUseCase(capture);
+        if (!captureOnly) groupBuilder.addUseCase(analysis);
+        UseCaseGroup group = groupBuilder.build();
 
         frontCamera = lensFacing == CameraSelector.LENS_FACING_FRONT;
         poseOverlay.setPoseFrame(null);
         try {
+            analysisPaused = captureOnly;
             if (camera != null) camera.getCameraInfo().getTorchState().removeObservers(this);
             camera = null;
             provider.unbindAll();
-            camera = provider.bindToLifecycle(this, selector, group);
+            try {
+                camera = provider.bindToLifecycle(this, photoSelector, group);
+            } catch (RuntimeException e) {
+                if (photoSelector == selector) throw e;
+                Log.w(TAG, "OEM capture unavailable; falling back to high-resolution capture", e);
+                provider.unbindAll();
+                camera = provider.bindToLifecycle(this, selector, group);
+                processing = "standard (OEM fallback)";
+            }
             imageCapture = capture;
+            captureSession = captureOnly;
             boolean hasFlash = camera.getCameraInfo().hasFlashUnit();
-            torchButton.setEnabled(hasFlash);
+            if (hasFlash && torchOn) camera.getCameraControl().enableTorch(true);
+            torchButton.setEnabled(hasFlash && !capturing);
             torchButton.setAlpha(hasFlash ? 1f : 0.35f);
             torchButton.setContentDescription(getString(hasFlash
                     ? R.string.camera_torch_on : R.string.camera_torch_unavailable));
@@ -749,8 +805,10 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
                 }
             });
             previewView.setOnTouchListener((view, event) -> {
-                if (event.getAction() == android.view.MotionEvent.ACTION_UP && camera != null) {
+                if (event.getAction() == android.view.MotionEvent.ACTION_UP && camera != null && !capturing) {
                     view.performClick();
+                    focusX = event.getX() / previewView.getWidth();
+                    focusY = event.getY() / previewView.getHeight();
                     FocusMeteringAction focus = new FocusMeteringAction.Builder(
                             previewView.getMeteringPointFactory().createPoint(event.getX(), event.getY()))
                             .setAutoCancelDuration(5, TimeUnit.SECONDS).build();
@@ -761,15 +819,17 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
         } catch (RuntimeException e) {
             Log.e(TAG, "Use case binding failed", e);
             imageCapture = null;
-            showStatus(getString(R.string.camera_bind_failed, e.getMessage()));
-            return;
+            if (!captureOnly) showStatus(getString(R.string.camera_bind_failed, e.getMessage()));
+            return false;
         }
 
         resolutionSummary = String.format(Locale.US, "%s  preview %s  analysis %s",
                 frontCamera ? "front" : "back",
                 describe(preview.getResolutionInfo()), describe(analysis.getResolutionInfo()));
         Log.i(PERF_TAG, "Bound camera: " + resolutionSummary + "  capture "
-                + describe(capture.getResolutionInfo()));
+                + describe(capture.getResolutionInfo()) + "  processing=" + processing
+                + "  captureOnly=" + captureOnly);
+        return true;
     }
 
     private void toggleTorch() {
@@ -789,12 +849,6 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
         }, ContextCompat.getMainExecutor(this));
     }
 
-    private static boolean supportsMode(@Nullable int[] available, int mode) {
-        if (available == null) return false;
-        for (int value : available) if (value == mode) return true;
-        return false;
-    }
-
     private static String describe(@Nullable ResolutionInfo info) {
         if (info == null) {
             return "?";
@@ -806,7 +860,7 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
     /** Runs on the analysis thread. */
     private void analyzeFrame(ImageProxy image) {
         PoseDetector detector = poseDetector;
-        if (detector == null) {
+        if (detector == null || analysisPaused) {
             image.close();
             return;
         }
@@ -817,6 +871,7 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
 
     @Override
     public void onPose(PoseFrame frame) {
+        if (analysisPaused) return;
         perfStats.record(frame.prepMs, frame.inferenceMs);
         BodyPose live = frame.toBodyPose(waistUp);
         PoseTemplate currentTarget = target;
@@ -837,7 +892,7 @@ public class CameraActivity extends AppCompatActivity implements PoseDetector.Li
 
     private void onFrameResult(PoseFrame frame, @Nullable BodyPose live,
                                @Nullable MatchResult match) {
-        if (isDestroyed()) {
+        if (isDestroyed() || analysisPaused || capturing) {
             return;
         }
         poseOverlay.setPoseFrame(frame);

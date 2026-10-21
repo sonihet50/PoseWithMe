@@ -53,6 +53,7 @@ dependencies {
     implementation(libs.camera.camera2)
     implementation(libs.camera.lifecycle)
     implementation(libs.camera.view)
+    implementation(libs.camera.extensions)
     implementation(libs.mediapipe.tasks.vision)
     implementation(libs.recyclerview)
     implementation(libs.exifinterface)
